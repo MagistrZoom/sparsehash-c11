@@ -160,7 +160,11 @@ struct dense_hashtable_iterator {
       const dense_hashtable<V, K, HF, ExK, SetK, EqK, A>* h, pointer it,
       pointer it_end, bool advance)
       : ht(h), pos(it), end(it_end) {
-    if (advance) advance_past_empty_and_deleted();
+    if (pos != nullptr && ht->use_empty()) {
+      if (advance) advance_past_empty_and_deleted();
+    } else {
+      pos = end;
+    }
   }
   dense_hashtable_iterator() {}
   // The default destructor is fine; we don't define one
@@ -221,7 +225,11 @@ struct dense_hashtable_const_iterator {
       const dense_hashtable<V, K, HF, ExK, SetK, EqK, A>* h, pointer it,
       pointer it_end, bool advance)
       : ht(h), pos(it), end(it_end) {
-    if (advance) advance_past_empty_and_deleted();
+    if (pos != nullptr && ht->use_empty()) {
+      if (advance) advance_past_empty_and_deleted();
+    } else {
+      pos = end;
+    }
   }
   dense_hashtable_const_iterator() : ht(NULL), pos(pointer()), end(pointer()) {}
   // This lets us convert regular iterators to const iterators
@@ -519,6 +527,9 @@ class dense_hashtable {
   key_type empty_key() const {
     assert(settings.use_empty());
     return key_info.empty_key;
+  }
+  bool use_empty() const {
+    return settings.use_empty();
   }
 
   // FUNCTIONS CONCERNING SIZE

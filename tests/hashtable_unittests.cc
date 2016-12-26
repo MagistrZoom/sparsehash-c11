@@ -319,6 +319,51 @@ TYPED_TEST(HashtableAllTest, Iterating) {
   EXPECT_TRUE(it == this->ht_.end());
 }
 
+TYPED_TEST(HashtableAllTest, IteratorManipulation) {
+  // empty container
+  auto begin = this->ht_.begin();
+  auto end = this->ht_.end();
+  EXPECT_TRUE(begin == end);
+  auto len = std::distance(begin, end);
+  EXPECT_EQ(0, len);
+  std::advance(begin, len);
+  EXPECT_TRUE(begin == end);
+
+  // single element
+  this->ht_.insert(this->UniqueObject(1));
+  begin = this->ht_.begin();
+  end = this->ht_.end();
+  EXPECT_FALSE(begin == end);
+  len = std::distance(begin, end);
+  EXPECT_EQ(1, len);
+  std::advance(begin, len);
+  EXPECT_TRUE(begin == end);
+
+  // two elements
+  this->ht_.insert(this->UniqueObject(11));
+  begin = this->ht_.begin();
+  end = this->ht_.end();
+  EXPECT_FALSE(begin == end);
+  len = std::distance(begin, end);
+  EXPECT_EQ(2, len);
+  std::advance(begin, len);
+  EXPECT_TRUE(begin == end);
+
+  // seven elements
+  this->ht_.insert(this->UniqueObject(111));
+  this->ht_.insert(this->UniqueObject(1111));
+  this->ht_.insert(this->UniqueObject(11111));
+  this->ht_.insert(this->UniqueObject(111111));
+  this->ht_.insert(this->UniqueObject(1111111));
+  begin = this->ht_.begin();
+  end = this->ht_.end();
+  EXPECT_FALSE(begin == end);
+  len = std::distance(begin, end);
+  EXPECT_EQ(7, len);
+  std::advance(begin, len);
+  EXPECT_TRUE(begin == end);
+}
+
 TYPED_TEST(HashtableIntTest, Constructors) {
   // The key/value types don't matter here, so I just test on one set
   // of tables, the ones with int keys, which can easily handle the
@@ -1423,6 +1468,19 @@ TEST(HashtableTest, NestedHashtables) {
   ht3[1];
   ht3[2][3] = 4;
   dense_hash_map<int, DenseIntMap<int>, Hasher, Hasher> ht3copy = ht3;
+}
+
+TEST(HashtableTest, IteratingOverEmpty) {
+  dense_hash_set<const char *> hs;
+  auto end = hs.end();
+  auto it = hs.begin();
+  while (it != end) {
+    hs.erase(it++);
+  }
+  dense_hash_map<const char *, std::vector<int>> hm;
+  for (auto && kv : hm) {
+    auto i = kv.second.size();
+  }
 }
 
 TEST(HashtableTest, ResizeWithoutShrink) {
