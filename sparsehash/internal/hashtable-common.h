@@ -232,7 +232,8 @@ class sh_hashtable_settings : public HashFunc {
     set_shrink_factor(ht_empty_flt);
   }
 
-  size_type hash(const key_type& v) const {
+  template <class K>
+  size_type hash(const K& v) const {
     // We munge the hash value when we don't trust hasher::operator().
     return hash_munger<Key>::MungedHash(hasher::operator()(v));
   }

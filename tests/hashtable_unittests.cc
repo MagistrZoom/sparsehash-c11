@@ -56,6 +56,7 @@
 #include <vector>
 #include <type_traits>
 #include <sparsehash/sparsetable>
+#include <sparsehash/wrapped_dense_hash_set>
 #include "hashtable_test_interface.h"
 #include "fixture_unittests.h"
 #include "gtest/gtest.h"
@@ -64,6 +65,7 @@ using std::cout;
 using std::set;
 using std::vector;
 
+using namespace sparsehash;
 using namespace testing;
 
 class ValueSerializer {
@@ -1464,6 +1466,8 @@ TEST(HashtableDeathTest, ResizeOverflow) {
   EXPECT_THROW(ht2.resize(static_cast<size_t>(-1)), std::length_error);
 }
 
+template <class U> using AllocT = Alloc<U, uint8, 10>;
+
 TEST(HashtableDeathTest, InsertSizeTypeOverflow) {
   static const int kMax = 256;
   vector<int> test_data(kMax);
@@ -1473,13 +1477,17 @@ TEST(HashtableDeathTest, InsertSizeTypeOverflow) {
 
   sparse_hash_set<int, Hasher, Hasher, Alloc<int, uint8, 10>> shs;
   dense_hash_set<int, Hasher, Hasher, Alloc<int, uint8, 10>> dhs;
+  wrapped_dense_hash_set<int, Hasher, Hasher, AllocT> whs;
   dhs.set_empty_key(-1);
 
   // Test we are using the correct allocator
   EXPECT_TRUE(shs.get_allocator().is_custom_alloc());
   EXPECT_TRUE(dhs.get_allocator().is_custom_alloc());
+  EXPECT_TRUE(whs.get_allocator().is_custom_alloc());
 
   // Test size_type overflow in insert(it, it)
+  EXPECT_THROW(whs.insert(test_data.begin(), test_data.end()),
+               std::length_error);
   EXPECT_THROW(dhs.insert(test_data.begin(), test_data.end()),
                std::length_error);
   EXPECT_THROW(shs.insert(test_data.begin(), test_data.end()),
@@ -1495,9 +1503,12 @@ TEST(HashtableDeathTest, InsertMaxSizeOverflow) {
 
   sparse_hash_set<int, Hasher, Hasher, Alloc<int, uint8, 10>> shs;
   dense_hash_set<int, Hasher, Hasher, Alloc<int, uint8, 10>> dhs;
+  wrapped_dense_hash_set<int, Hasher, Hasher, AllocT> whs;
   dhs.set_empty_key(-1);
 
   // Test max_size overflow
+  EXPECT_THROW(whs.insert(test_data.begin(), test_data.begin() + 11),
+               std::length_error);
   EXPECT_THROW(dhs.insert(test_data.begin(), test_data.begin() + 11),
                std::length_error);
   EXPECT_THROW(shs.insert(test_data.begin(), test_data.begin() + 11),
@@ -1508,9 +1519,11 @@ TEST(HashtableDeathTest, ResizeSizeTypeOverflow) {
   // Test min-buckets overflow, when we want to resize too close to size_type
   sparse_hash_set<int, Hasher, Hasher, Alloc<int, uint8, 10>> shs;
   dense_hash_set<int, Hasher, Hasher, Alloc<int, uint8, 10>> dhs;
+  wrapped_dense_hash_set<int, Hasher, Hasher, AllocT> whs;
   dhs.set_empty_key(-1);
 
   EXPECT_THROW(dhs.resize(250), std::length_error);  // 9+250 > 256
+  EXPECT_THROW(whs.resize(250), std::length_error);
   EXPECT_THROW(shs.resize(250), std::length_error);
 }
 
@@ -1523,13 +1536,17 @@ TEST(HashtableDeathTest, ResizeDeltaOverflow) {
 
   sparse_hash_set<int, Hasher, Hasher, Alloc<int, uint8, 255>> shs;
   dense_hash_set<int, Hasher, Hasher, Alloc<int, uint8, 255>> dhs;
+  wrapped_dense_hash_set<int, Hasher, Hasher, AllocT> whs;
   dhs.set_empty_key(-1);
   for (int i = 0; i < 9; i++) {
     dhs.insert(i);
+    whs.insert(i);
     shs.insert(i);
   }
   EXPECT_THROW(dhs.insert(test_data.begin(), test_data.begin() + 250),
                std::length_error);  // 9+250 > 256
+  EXPECT_THROW(whs.insert(test_data.begin(), test_data.begin() + 250),
+               std::length_error);
   EXPECT_THROW(shs.insert(test_data.begin(), test_data.begin() + 250),
                std::length_error);
 }

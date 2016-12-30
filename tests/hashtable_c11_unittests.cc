@@ -1,4 +1,5 @@
 #include <sparsehash/dense_hash_map>
+#include <sparsehash/wrapped_dense_hash_set>
 #include <unordered_map>
 
 #include "fixture_unittests.h"
@@ -10,6 +11,7 @@
 
 using google::dense_hash_map;
 using google::dense_hash_set;
+using sparsehash::wrapped_dense_hash_set;
 
 namespace sparsehash_internal = google::sparsehash_internal;
 
@@ -611,5 +613,111 @@ TEST(DenseHashSetMoveTest, Emplace)
     ASSERT_EQ(0, A::copy_ctor);
     ASSERT_EQ(0, A::copy_assign);
     ASSERT_EQ(1, A::move_ctor);
+    ASSERT_EQ(0, A::move_assign);
+}
+
+TEST(WrappedHashSetMoveTest, MoveConstructor)
+{
+    wrapped_dense_hash_set<A, HashA> h;
+
+    const int Elements = 100;
+    for (int i = 1; i <= Elements; ++i)
+        h.emplace(i);
+
+    A::reset();
+    wrapped_dense_hash_set<A, HashA> h2(std::move(h));
+
+    ASSERT_EQ(Elements, (int)h2.size());
+
+    ASSERT_EQ(2, A::ctor); // empty and deleted
+    ASSERT_EQ(0, A::copy_ctor);
+    ASSERT_EQ(0, A::copy_assign);
+    ASSERT_EQ(2, A::move_ctor); // swap() of empty & deleted key
+    ASSERT_EQ(4, A::move_assign);
+}
+
+TEST(WrappedHashSetMoveTest, MoveAssignment)
+{
+    wrapped_dense_hash_set<A, HashA> h, h2;
+
+    const int Elements = 100;
+    for (int i = 1; i <= Elements; ++i)
+        h.emplace(i);
+
+    A::reset();
+    h2 = std::move(h);
+
+    ASSERT_EQ(Elements, (int)h2.size());
+
+    ASSERT_EQ(0, A::ctor);
+    ASSERT_EQ(0, A::copy_ctor);
+    ASSERT_EQ(0, A::copy_assign);
+    ASSERT_EQ(2, A::move_ctor); // swap() of empty & deleted key
+    ASSERT_EQ(4, A::move_assign);
+}
+
+TEST(WrappedHashSetMoveTest, Insert)
+{
+    wrapped_dense_hash_set<A, HashA> h;
+
+    A::reset();
+    h.insert(A(1));
+
+    ASSERT_EQ(1, A::ctor);
+    ASSERT_EQ(0, A::copy_ctor);
+    ASSERT_EQ(0, A::copy_assign);
+    ASSERT_EQ(1, A::move_ctor);
+    ASSERT_EQ(0, A::move_assign);
+
+    A a(1);
+    A::reset();
+
+    ASSERT_EQ(0, A::ctor);
+    ASSERT_EQ(0, A::copy_ctor);
+    ASSERT_EQ(0, A::copy_assign);
+    ASSERT_EQ(0, A::move_ctor);
+    ASSERT_EQ(0, A::move_assign);
+}
+
+TEST(WrappedHashSetMoveTest, Emplace)
+{
+    wrapped_dense_hash_set<A, HashA> h;
+
+    A::reset();
+    h.emplace(1);
+
+    ASSERT_EQ(1, A::ctor);
+    ASSERT_EQ(0, A::copy_ctor);
+    ASSERT_EQ(0, A::copy_assign);
+    ASSERT_EQ(1, A::move_ctor);
+    ASSERT_EQ(0, A::move_assign);
+
+    A::reset();
+    h.emplace(1);
+
+    ASSERT_EQ(1, A::ctor);
+    ASSERT_EQ(0, A::copy_ctor);
+    ASSERT_EQ(0, A::copy_assign);
+    ASSERT_EQ(0, A::move_ctor);
+    ASSERT_EQ(0, A::move_assign);
+}
+
+TEST(WrappedHashSetMoveTest, Find)
+{
+    wrapped_dense_hash_set<A, HashA> h;
+
+    const int Elements = 100;
+    for (int i = 1; i <= Elements; ++i)
+        h.emplace(i);
+
+    A a(33);
+    A::reset();
+    auto it = h.find(a);
+    EXPECT_EQ(a, *it);
+
+    ASSERT_EQ(0, A::ctor);
+    ASSERT_EQ(0, A::copy_ctor);
+    ASSERT_EQ(0, A::copy_assign);
+    ASSERT_EQ(0, A::move_ctor);
     ASSERT_EQ(0, A::move_assign);
 }
