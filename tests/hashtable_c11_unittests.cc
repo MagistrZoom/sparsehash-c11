@@ -1,4 +1,5 @@
 #include <sparsehash/dense_hash_map>
+#include <sparsehash/wrapped_dense_hash_map>
 #include <sparsehash/wrapped_dense_hash_set>
 #include <unordered_map>
 
@@ -12,6 +13,7 @@
 using google::dense_hash_map;
 using google::dense_hash_set;
 using sparsehash::wrapped_dense_hash_set;
+using sparsehash::wrapped_dense_hash_map;
 
 namespace sparsehash_internal = google::sparsehash_internal;
 
@@ -629,11 +631,11 @@ TEST(WrappedHashSetMoveTest, MoveConstructor)
 
     ASSERT_EQ(Elements, (int)h2.size());
 
-    ASSERT_EQ(2, A::ctor); // empty and deleted
+    ASSERT_EQ(0, A::ctor);
     ASSERT_EQ(0, A::copy_ctor);
     ASSERT_EQ(0, A::copy_assign);
-    ASSERT_EQ(2, A::move_ctor); // swap() of empty & deleted key
-    ASSERT_EQ(4, A::move_assign);
+    ASSERT_EQ(0, A::move_ctor);
+    ASSERT_EQ(0, A::move_assign);
 }
 
 TEST(WrappedHashSetMoveTest, MoveAssignment)
@@ -652,8 +654,8 @@ TEST(WrappedHashSetMoveTest, MoveAssignment)
     ASSERT_EQ(0, A::ctor);
     ASSERT_EQ(0, A::copy_ctor);
     ASSERT_EQ(0, A::copy_assign);
-    ASSERT_EQ(2, A::move_ctor); // swap() of empty & deleted key
-    ASSERT_EQ(4, A::move_assign);
+    ASSERT_EQ(0, A::move_ctor);
+    ASSERT_EQ(0, A::move_assign);
 }
 
 TEST(WrappedHashSetMoveTest, Insert)
@@ -671,6 +673,7 @@ TEST(WrappedHashSetMoveTest, Insert)
 
     A a(1);
     A::reset();
+    h.insert(a);
 
     ASSERT_EQ(0, A::ctor);
     ASSERT_EQ(0, A::copy_ctor);
@@ -714,6 +717,185 @@ TEST(WrappedHashSetMoveTest, Find)
     A::reset();
     auto it = h.find(a);
     EXPECT_EQ(a, *it);
+
+    ASSERT_EQ(0, A::ctor);
+    ASSERT_EQ(0, A::copy_ctor);
+    ASSERT_EQ(0, A::copy_assign);
+    ASSERT_EQ(0, A::move_ctor);
+    ASSERT_EQ(0, A::move_assign);
+}
+
+TEST(WrappedHashMapMoveTest, MoveConstructor)
+{
+    wrapped_dense_hash_map<A, int, HashA> h;
+
+    const int Elements = 100;
+    for (int i = 1; i <= Elements; ++i)
+        h.emplace(i, i);
+
+    A::reset();
+    wrapped_dense_hash_map<A, int, HashA> h2(std::move(h));
+
+    ASSERT_EQ(Elements, (int)h2.size());
+
+    ASSERT_EQ(0, A::ctor);
+    ASSERT_EQ(0, A::copy_ctor);
+    ASSERT_EQ(0, A::copy_assign);
+    ASSERT_EQ(0, A::move_ctor);
+    ASSERT_EQ(0, A::move_assign);
+}
+
+TEST(WrappedHashMapMoveTest, MoveAssignment)
+{
+    wrapped_dense_hash_map<A, int, HashA> h, h2;
+
+    const int Elements = 100;
+    for (int i = 1; i <= Elements; ++i)
+        h.emplace(i, i);
+
+    A::reset();
+    h2 = std::move(h);
+
+    ASSERT_EQ(Elements, (int)h2.size());
+
+    ASSERT_EQ(0, A::ctor);
+    ASSERT_EQ(0, A::copy_ctor);
+    ASSERT_EQ(0, A::copy_assign);
+    ASSERT_EQ(0, A::move_ctor);
+    ASSERT_EQ(0, A::move_assign);
+}
+
+TEST(WrappedHashMapMoveTest, Insert)
+{
+    wrapped_dense_hash_map<A, int, HashA> h;
+
+    A::reset();
+    h.insert(std::pair<A, int>(1, 1));
+
+    ASSERT_EQ(1, A::ctor);
+    ASSERT_EQ(0, A::copy_ctor);
+    ASSERT_EQ(0, A::copy_assign);
+    ASSERT_EQ(1, A::move_ctor);
+    ASSERT_EQ(0, A::move_assign);
+
+    std::pair<const A, int> p(1, 1);
+    A::reset();
+    h.insert(p);
+
+    ASSERT_EQ(0, A::ctor);
+    ASSERT_EQ(0, A::copy_ctor);
+    ASSERT_EQ(0, A::copy_assign);
+    ASSERT_EQ(0, A::move_ctor);
+    ASSERT_EQ(0, A::move_assign);
+
+    wrapped_dense_hash_map<A, B, HashA> hh;
+
+    A::reset();
+    B::reset();
+    hh.insert(std::pair<A, B>(1, true));
+
+    ASSERT_EQ(1, A::ctor);
+    ASSERT_EQ(0, A::copy_ctor);
+    ASSERT_EQ(0, A::copy_assign);
+    ASSERT_EQ(1, A::move_ctor);
+    ASSERT_EQ(0, A::move_assign);
+    ASSERT_EQ(1, B::ctor);
+    ASSERT_EQ(0, B::copy_ctor);
+    ASSERT_EQ(0, B::copy_assign);
+    ASSERT_EQ(1, B::move_ctor);
+    ASSERT_EQ(0, B::move_assign);
+
+
+    std::pair<const A, B> pp(1, true);
+    A::reset();
+    B::reset();
+    hh.insert(pp);
+
+    ASSERT_EQ(0, A::ctor);
+    ASSERT_EQ(0, A::copy_ctor);
+    ASSERT_EQ(0, A::copy_assign);
+    ASSERT_EQ(0, A::move_ctor);
+    ASSERT_EQ(0, A::move_assign);
+    // if insertion is unsuccessful,
+    // B is not constructed at all
+    ASSERT_EQ(0, B::ctor);
+    ASSERT_EQ(0, B::copy_ctor);
+    ASSERT_EQ(0, B::copy_assign);
+    ASSERT_EQ(0, B::move_ctor);
+    ASSERT_EQ(0, B::move_assign);
+}
+
+TEST(WrappedHashMapMoveTest, Emplace)
+{
+    wrapped_dense_hash_map<A, int, HashA> h;
+
+    A::reset();
+    h.emplace(1, 1);
+
+    ASSERT_EQ(1, A::ctor);
+    ASSERT_EQ(0, A::copy_ctor);
+    ASSERT_EQ(0, A::copy_assign);
+    ASSERT_EQ(1, A::move_ctor);
+    ASSERT_EQ(0, A::move_assign);
+
+    A::reset();
+    h.emplace(1, 1);
+
+    ASSERT_EQ(1, A::ctor);
+    ASSERT_EQ(0, A::copy_ctor);
+    ASSERT_EQ(0, A::copy_assign);
+    ASSERT_EQ(0, A::move_ctor);
+    ASSERT_EQ(0, A::move_assign);
+
+    wrapped_dense_hash_map<A, B, HashA> hh;
+
+    A::reset();
+    B::reset();
+    hh.emplace(1, true);
+
+    ASSERT_EQ(1, A::ctor);
+    ASSERT_EQ(0, A::copy_ctor);
+    ASSERT_EQ(0, A::copy_assign);
+    ASSERT_EQ(1, A::move_ctor);
+    ASSERT_EQ(0, A::move_assign);
+    ASSERT_EQ(1, B::ctor);
+    ASSERT_EQ(0, B::copy_ctor);
+    ASSERT_EQ(0, B::copy_assign);
+    ASSERT_EQ(0, B::move_ctor);
+    ASSERT_EQ(0, B::move_assign);
+
+
+    A::reset();
+    B::reset();
+    hh.emplace(1, false);
+
+    ASSERT_EQ(1, A::ctor);
+    ASSERT_EQ(0, A::copy_ctor);
+    ASSERT_EQ(0, A::copy_assign);
+    ASSERT_EQ(0, A::move_ctor);
+    ASSERT_EQ(0, A::move_assign);
+    // if insertion is unsuccessful,
+    // B is not constructed at all
+    ASSERT_EQ(0, B::ctor);
+    ASSERT_EQ(0, B::copy_ctor);
+    ASSERT_EQ(0, B::copy_assign);
+    ASSERT_EQ(0, B::move_ctor);
+    ASSERT_EQ(0, B::move_assign);
+}
+
+TEST(WrappedHashMapMoveTest, Find)
+{
+    wrapped_dense_hash_map<A, int, HashA> h;
+
+    const int Elements = 100;
+    for (int i = 1; i <= Elements; ++i)
+        h.emplace(i, i);
+
+    A a(33);
+    A::reset();
+    auto it = h.find(a);
+    EXPECT_EQ(a, it->first);
+    EXPECT_EQ(33, it->second);
 
     ASSERT_EQ(0, A::ctor);
     ASSERT_EQ(0, A::copy_ctor);

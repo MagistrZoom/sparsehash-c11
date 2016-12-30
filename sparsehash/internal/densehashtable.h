@@ -120,9 +120,9 @@ namespace google {
 //             given an argument list, from which a Value could be constructed,
 //             returns forwarded or constructed Key, associated with such a
 //             Value.
-// SetKey: given a Value* and a Key, modifies the value such that
-//         ExtractKey(value) == key.  We guarantee this is only called
-//         with key == deleted_key or key == empty_key.
+// DeletedKey and EmptyKey: provides facilities for setting, getting respective keys,
+//                          for checking a value for emptiness or deletedness and
+//                          for making values deleted or empty.
 // ConstructValue: construct in place a Value; arguments could be a const
 //                 l-value reference to a Value, r-value reference to a Value,
 //                 or some reference to a Key and an argument list, from
@@ -134,26 +134,26 @@ namespace google {
 //           if they are both associated with the same Value).
 // Alloc: STL allocator to use to allocate memory.
 
-template <class Value, class Key, class HashFcn, class ExtractKey, class SetKey,
-          class ConstructValue, class EqualKey, class Alloc>
+template <class Value, class Key, class HashFcn, class ExtractKey, class DeletedKey,
+          class EmptyKey, class ConstructValue, class EqualKey, class Alloc>
 class dense_hashtable;
 
-template <class V, class K, class HF, class ExK, class SetK, class CV, class EqK, class A>
+template <class V, class K, class HF, class ExK, class DelK, class EmK, class CV, class EqK, class A>
 struct dense_hashtable_iterator;
 
-template <class V, class K, class HF, class ExK, class SetK, class CV, class EqK, class A>
+template <class V, class K, class HF, class ExK, class DelK, class EmK, class CV, class EqK, class A>
 struct dense_hashtable_const_iterator;
 
 // We're just an array, but we need to skip over empty and deleted elements
-template <class V, class K, class HF, class ExK, class SetK, class CV, class EqK, class A>
+template <class V, class K, class HF, class ExK, class DelK, class EmK, class CV, class EqK, class A>
 struct dense_hashtable_iterator {
  private:
   using value_alloc_type =
       typename std::allocator_traits<A>::template rebind_alloc<V>;
 
  public:
-  typedef dense_hashtable_iterator<V, K, HF, ExK, SetK, CV, EqK, A> iterator;
-  typedef dense_hashtable_const_iterator<V, K, HF, ExK, SetK, CV, EqK, A>
+  typedef dense_hashtable_iterator<V, K, HF, ExK, DelK, EmK, CV, EqK, A> iterator;
+  typedef dense_hashtable_const_iterator<V, K, HF, ExK, DelK, EmK, CV, EqK, A>
       const_iterator;
 
   typedef std::forward_iterator_tag iterator_category;  // very little defined!
@@ -165,7 +165,7 @@ struct dense_hashtable_iterator {
 
   // "Real" constructor and default constructor
   dense_hashtable_iterator(
-      const dense_hashtable<V, K, HF, ExK, SetK, CV, EqK, A>* h, pointer it,
+      const dense_hashtable<V, K, HF, ExK, DelK, EmK, CV, EqK, A>* h, pointer it,
       pointer it_end, bool advance)
       : ht(h), pos(it), end(it_end) {
     if (advance) advance_past_empty_and_deleted();
@@ -201,20 +201,20 @@ struct dense_hashtable_iterator {
   bool operator!=(const iterator& it) const { return pos != it.pos; }
 
   // The actual data
-  const dense_hashtable<V, K, HF, ExK, SetK, CV, EqK, A>* ht;
+  const dense_hashtable<V, K, HF, ExK, DelK, EmK, CV, EqK, A>* ht;
   pointer pos, end;
 };
 
 // Now do it all again, but with const-ness!
-template <class V, class K, class HF, class ExK, class SetK, class CV, class EqK, class A>
+template <class V, class K, class HF, class ExK, class DelK, class EmK, class CV, class EqK, class A>
 struct dense_hashtable_const_iterator {
  private:
   using value_alloc_type =
       typename std::allocator_traits<A>::template rebind_alloc<V>;
 
  public:
-  typedef dense_hashtable_iterator<V, K, HF, ExK, SetK, CV, EqK, A> iterator;
-  typedef dense_hashtable_const_iterator<V, K, HF, ExK, SetK, CV, EqK, A>
+  typedef dense_hashtable_iterator<V, K, HF, ExK, DelK, EmK, CV, EqK, A> iterator;
+  typedef dense_hashtable_const_iterator<V, K, HF, ExK, DelK, EmK, CV, EqK, A>
       const_iterator;
 
   typedef std::forward_iterator_tag iterator_category;  // very little defined!
@@ -226,7 +226,7 @@ struct dense_hashtable_const_iterator {
 
   // "Real" constructor and default constructor
   dense_hashtable_const_iterator(
-      const dense_hashtable<V, K, HF, ExK, SetK, CV, EqK, A>* h, pointer it,
+      const dense_hashtable<V, K, HF, ExK, DelK, EmK, CV, EqK, A>* h, pointer it,
       pointer it_end, bool advance)
       : ht(h), pos(it), end(it_end) {
     if (advance) advance_past_empty_and_deleted();
@@ -265,12 +265,12 @@ struct dense_hashtable_const_iterator {
   bool operator!=(const const_iterator& it) const { return pos != it.pos; }
 
   // The actual data
-  const dense_hashtable<V, K, HF, ExK, SetK, CV, EqK, A>* ht;
+  const dense_hashtable<V, K, HF, ExK, DelK, EmK, CV, EqK, A>* ht;
   pointer pos, end;
 };
 
-template <class Value, class Key, class HashFcn, class ExtractKey, class SetKey,
-          class ConstructValue, class EqualKey, class Alloc>
+template <class Value, class Key, class HashFcn, class ExtractKey, class DeletedKey,
+          class EmptyKey, class ConstructValue, class EqualKey, class Alloc>
 class dense_hashtable {
  private:
   using value_alloc_type =
@@ -289,11 +289,11 @@ class dense_hashtable {
   typedef typename value_alloc_type::const_reference const_reference;
   typedef typename value_alloc_type::pointer pointer;
   typedef typename value_alloc_type::const_pointer const_pointer;
-  typedef dense_hashtable_iterator<Value, Key, HashFcn, ExtractKey, SetKey,
-                                   ConstructValue, EqualKey, Alloc> iterator;
+  typedef dense_hashtable_iterator<Value, Key, HashFcn, ExtractKey, DeletedKey,
+                                   EmptyKey, ConstructValue, EqualKey, Alloc> iterator;
 
-  typedef dense_hashtable_const_iterator<
-      Value, Key, HashFcn, ExtractKey, SetKey, ConstructValue, EqualKey, Alloc> const_iterator;
+  typedef dense_hashtable_const_iterator<Value, Key, HashFcn, ExtractKey, DeletedKey,
+          EmptyKey, ConstructValue, EqualKey, Alloc> const_iterator;
 
   // These come from tr1.  For us they're the same as regular iterators.
   typedef iterator local_iterator;
@@ -389,25 +389,17 @@ class dense_hashtable {
     assert(num_deleted == 0);
   }
 
-  // Test if the given key is the deleted indicator.  Requires
-  // num_deleted > 0, for correctness of read(), and because that
-  // guarantees that key_info.delkey is valid.
-  bool test_deleted_key(const key_type& key) const {
-    assert(num_deleted > 0);
-    return equals(key_info.delkey, key);
-  }
-
  public:
   void set_deleted_key(const key_type& key) {
     // the empty indicator (if specified) and the deleted indicator
     // must be different
     assert(
-        (!settings.use_empty() || !equals(key, key_info.empty_key)) &&
+        (!settings.use_empty() || !is_empty(key)) &&
         "Passed the empty-key to set_deleted_key");
     // It's only safe to change what "deleted" means if we purge deleted guys
     squash_deleted();
     settings.set_use_deleted(true);
-    key_info.delkey = key;
+    key_info.set_deleted(key);
   }
   void clear_deleted_key() {
     squash_deleted();
@@ -416,7 +408,7 @@ class dense_hashtable {
   key_type deleted_key() const {
     assert(settings.use_deleted() &&
            "Must set deleted key before calling deleted_key");
-    return key_info.delkey;
+    return key_info.get_deleted();
   }
 
   // These are public so the iterators can use them
@@ -424,17 +416,17 @@ class dense_hashtable {
   bool test_deleted(size_type bucknum) const {
     // Invariant: !use_deleted() implies num_deleted is 0.
     assert(settings.use_deleted() || num_deleted == 0);
-    return num_deleted > 0 && test_deleted_key(get_key(table[bucknum]));
+    return num_deleted > 0 && is_deleted(table[bucknum]);
   }
   bool test_deleted(const iterator& it) const {
     // Invariant: !use_deleted() implies num_deleted is 0.
     assert(settings.use_deleted() || num_deleted == 0);
-    return num_deleted > 0 && test_deleted_key(get_key(*it));
+    return num_deleted > 0 && is_deleted(*it);
   }
   bool test_deleted(const const_iterator& it) const {
     // Invariant: !use_deleted() implies num_deleted is 0.
     assert(settings.use_deleted() || num_deleted == 0);
-    return num_deleted > 0 && test_deleted_key(get_key(*it));
+    return num_deleted > 0 && is_deleted(*it);
   }
 
  private:
@@ -448,7 +440,7 @@ class dense_hashtable {
     check_use_deleted("set_deleted()");
     bool retval = !test_deleted(it);
     // &* converts from iterator to value-type.
-    set_key(&(*it), key_info.delkey);
+    set_deleted(*it);
     return retval;
   }
   // Set it so test_deleted is false.  true if object used to be deleted.
@@ -466,7 +458,7 @@ class dense_hashtable {
   bool set_deleted(const_iterator& it) {
     check_use_deleted("set_deleted()");
     bool retval = !test_deleted(it);
-    set_key(const_cast<pointer>(&(*it)), key_info.delkey);
+    set_deleted(const_cast<value_type&>(*it));
     return retval;
   }
   // Set it so test_deleted is false.  true if object used to be deleted.
@@ -485,23 +477,20 @@ class dense_hashtable {
   // These are public so the iterators can use them
   // True if the item at position bucknum is "empty" marker
   bool test_empty(size_type bucknum) const {
-    assert(settings.use_empty());  // we always need to know what's empty!
-    return equals(key_info.empty_key, get_key(table[bucknum]));
+    return is_empty(table[bucknum]);
   }
   bool test_empty(const iterator& it) const {
-    assert(settings.use_empty());  // we always need to know what's empty!
-    return equals(key_info.empty_key, get_key(*it));
+    return is_empty(*it);
   }
   bool test_empty(const const_iterator& it) const {
-    assert(settings.use_empty());  // we always need to know what's empty!
-    return equals(key_info.empty_key, get_key(*it));
+    return is_empty(*it);
   }
 
  private:
   void fill_range_with_empty(pointer table_start, size_type count) {
     for (size_type i = 0; i < count; ++i)
     {
-      construct_key(&table_start[i], key_info.empty_key);
+      construct_empty(&table_start[i]);
     }
   }
 
@@ -512,10 +501,10 @@ class dense_hashtable {
     // The deleted indicator (if specified) and the empty indicator
     // must be different.
     assert(
-        (!settings.use_deleted() || !equals(key, key_info.delkey)) &&
+        (!settings.use_deleted() || !is_deleted(key)) &&
         "Setting the empty key the same as the deleted key");
     settings.set_use_empty(true);
-    key_info.empty_key = key;
+    key_info.set_empty(key);
 
     assert(!table);  // must set before first use
     // num_buckets was set in constructor even though table was NULL
@@ -525,7 +514,7 @@ class dense_hashtable {
   }
   key_type empty_key() const {
     assert(settings.use_empty());
-    return key_info.empty_key;
+    return key_info.get_empty();
   }
 
   // FUNCTIONS CONCERNING SIZE
@@ -655,6 +644,7 @@ class dense_hashtable {
     // no duplicates and no deleted items, we can be more efficient
     assert((bucket_count() & (bucket_count() - 1)) == 0);  // a power of two
     for (auto&& value : ht) {
+      assert(!ht.is_empty(std::forward<decltype(value)>(value)));
       size_type num_probes = 0;  // how many times we've probed
       size_type bucknum;
       const size_type bucket_count_minus_one = bucket_count() - 1;
@@ -703,15 +693,24 @@ class dense_hashtable {
   // but also let you specify a hashfunction, key comparator,
   // and key extractor.  We also define a copy constructor and =.
   // DESTRUCTOR -- needs to free the table
-  explicit dense_hashtable(size_type expected_max_items_in_table = 0,
-                           const HashFcn& hf = HashFcn(),
+  explicit dense_hashtable(size_type expected_max_items_in_table = 0)
+      : num_deleted(0), num_elements(0),
+        num_buckets(expected_max_items_in_table == 0
+                        ? HT_DEFAULT_STARTING_BUCKETS
+                        : settings.min_buckets(expected_max_items_in_table, 0)),
+        table(nullptr) {
+    settings.reset_thresholds(bucket_count());
+  }
+  dense_hashtable(size_type expected_max_items_in_table,
+                           const HashFcn& hf,
                            const EqualKey& eql = EqualKey(),
                            const ExtractKey& ext = ExtractKey(),
-                           const SetKey& set = SetKey(),
+                           const DeletedKey& set = DeletedKey(),
+                           const EmptyKey& emk = EmptyKey(),
                            const ConstructValue& cv = ConstructValue(),
                            const Alloc& alloc = Alloc())
       : settings(hf),
-        key_info(ext, set, eql),
+        key_info(ext, set, emk, eql),
         num_deleted(0),
         num_elements(0),
         num_buckets(expected_max_items_in_table == 0
@@ -719,7 +718,7 @@ class dense_hashtable {
                         : settings.min_buckets(expected_max_items_in_table, 0)),
         val_info(alloc_impl<value_alloc_type>(alloc), cv),
         table(NULL) {
-    // table is NULL until emptyval is set.  However, we set num_buckets
+    // table is NULL until empty key is set.  However, we set num_buckets
     // here so we know how much space to allocate once emptyval is set
     settings.reset_thresholds(bucket_count());
   }
@@ -981,8 +980,8 @@ class dense_hashtable {
   std::pair<iterator, bool> insert_noresize(K&& key, Args&&... args) {
     // First, double-check we're not inserting delkey or emptyval
     assert(settings.use_empty() && "Inserting without empty key");
-    assert(!equals(key, key_info.empty_key) && "Inserting the empty key");
-    assert((!settings.use_deleted() || !equals(key, key_info.delkey)) && "Inserting the deleted key");
+    assert(!is_empty(key) && "Inserting the empty key");
+    assert((!settings.use_deleted() || !is_deleted(key)) && "Inserting the deleted key");
 
     const std::pair<size_type, size_type> pos = find_position(key);
     if (pos.first != ILLEGAL_BUCKET) {  // object was already there
@@ -1056,9 +1055,9 @@ class dense_hashtable {
   value_type& find_or_insert(K&& key) {
     // First, double-check we're not inserting emptykey or delkey
     assert(
-        (!settings.use_empty() || !equals(key, key_info.empty_key)) &&
+        (!settings.use_empty() || !is_empty(key)) &&
         "Inserting the empty key");
-    assert((!settings.use_deleted() || !equals(key, key_info.delkey)) &&
+    assert((!settings.use_deleted() || !is_deleted(key)) &&
            "Inserting the deleted key");
     const std::pair<size_type, size_type> pos = find_position(key);
     if (pos.first != ILLEGAL_BUCKET) {  // object was already there
@@ -1075,9 +1074,9 @@ class dense_hashtable {
   size_type erase(const key_type& key) {
     // First, double-check we're not trying to erase delkey or emptyval.
     assert(
-        (!settings.use_empty() || !equals(key, key_info.empty_key)) &&
+        (!settings.use_empty() || !is_empty(key)) &&
         "Erasing the empty key");
-    assert((!settings.use_deleted() || !equals(key, key_info.delkey)) &&
+    assert((!settings.use_deleted() || !is_deleted(key)) &&
            "Erasing the deleted key");
     const_iterator pos = find(key);  // shrug: shouldn't need to be const
     if (pos != end()) {
@@ -1221,6 +1220,7 @@ class dense_hashtable {
     typedef typename A::pointer pointer;
     typedef typename A::size_type size_type;
 
+    alloc_impl() = default;
     // Convert a normal allocator to one that has realloc_or_die()
     alloc_impl(const A& a) : A(a) {}
 
@@ -1244,6 +1244,7 @@ class dense_hashtable {
     typedef typename libc_allocator_with_realloc<A>::pointer pointer;
     typedef typename libc_allocator_with_realloc<A>::size_type size_type;
 
+    alloc_impl() = default;
     alloc_impl(const libc_allocator_with_realloc<A>& a)
         : libc_allocator_with_realloc<A>(a) {}
 
@@ -1260,14 +1261,13 @@ class dense_hashtable {
     }
   };
 
-  // Package allocator with emptyval to eliminate memory needed for
-  // the zero-size allocator.
-  // If new fields are added to this class, we should add them to
-  // operator= and swap.
+  // Allocator is not packed with anything, so even if it is
+  // empty, it still occupy space
   class ValInfo : public alloc_impl<value_alloc_type>, public ConstructValue {
    public:
     typedef typename alloc_impl<value_alloc_type>::value_type value_type;
 
+    ValInfo() = default;
     ValInfo(const alloc_impl<value_alloc_type>& a, const ConstructValue& cv)
         : alloc_impl<value_alloc_type>(a), ConstructValue(cv) {}
 
@@ -1285,17 +1285,23 @@ class dense_hashtable {
   struct Settings
       : sparsehash_internal::sh_hashtable_settings<key_type, hasher, size_type,
                                                    HT_MIN_BUCKETS> {
+    Settings()
+      : sparsehash_internal::sh_hashtable_settings<key_type, hasher,
+                                                   size_type, HT_MIN_BUCKETS> (
+            HT_OCCUPANCY_PCT / 100.0f, HT_EMPTY_PCT / 100.0f)
+    {}
     explicit Settings(const hasher& hf)
         : sparsehash_internal::sh_hashtable_settings<key_type, hasher,
                                                      size_type, HT_MIN_BUCKETS>(
               hf, HT_OCCUPANCY_PCT / 100.0f, HT_EMPTY_PCT / 100.0f) {}
   };
 
-  // Packages ExtractKey and SetKey functors.
-  class KeyInfo : public ExtractKey, public SetKey, public EqualKey {
+  // Packages ExtractKey and EqualKey functors with DeletedKey and EmptyKey
+  class KeyInfo : public ExtractKey, public DeletedKey, public EmptyKey, public EqualKey {
    public:
-    KeyInfo(const ExtractKey& ek, const SetKey& sk, const EqualKey& eq)
-        : ExtractKey(ek), SetKey(sk), EqualKey(eq) {}
+    KeyInfo() = default;
+    KeyInfo(const ExtractKey& ek, const DeletedKey& sk, const EmptyKey& emk, const EqualKey& eq)
+        : ExtractKey(ek), DeletedKey(sk), EmptyKey(emk), EqualKey(eq) {}
 
     // We want to return the exact same type as ExtractKey: Key or const Key&
     template <typename... Args>
@@ -1303,21 +1309,36 @@ class dense_hashtable {
       -> decltype(ExtractKey::operator()(std::forward<Args>(args)...)) {
       return ExtractKey::operator()(std::forward<Args>(args)...);
     }
-    void set_key(pointer v, const key_type& k) const {
-      SetKey::operator()(v, k);
-    }
-    void construct_key(pointer v, const key_type& k) const {
-      SetKey::operator()(v, k, true);
-    }
     template <class K1, class K2>
     bool equals(const K1& a, const K2& b) const {
       return EqualKey::operator()(a, b);
     }
-
-    // Which key marks deleted entries.
-    // TODO(csilvers): make a pointer, and get rid of use_deleted (benchmark!)
-    typename std::remove_const<key_type>::type delkey;
-    typename std::remove_const<key_type>::type empty_key;
+    template <class K>
+    bool is_deleted(const K& k) const {
+      return DeletedKey::check(k, *this, *this);
+    }
+    void make_deleted(value_type& v) const {
+      DeletedKey::make(v);
+    }
+    void set_deleted(const key_type& key) {
+      DeletedKey::set(key);
+    }
+    const key_type& get_deleted() const {
+      return DeletedKey::get();
+    }
+    template <class K>
+    bool is_empty(const K& k) const {
+      return EmptyKey::check(k, *this, *this);
+    }
+    void construct_empty(pointer v) const {
+      EmptyKey::construct(v);
+    }
+    void set_empty(const key_type& key) {
+      EmptyKey::set(key);
+    }
+    const key_type& get_empty() const {
+      return EmptyKey::get();
+    }
   };
 
   // Utility functions to access the templated operators
@@ -1326,6 +1347,15 @@ class dense_hashtable {
   template <class K1, class K2>
   bool equals(const K1& a, const K2& b) const {
     return key_info.equals(a, b);
+  }
+  template <class K>
+  bool is_deleted(const K& k) const {
+    return key_info.is_deleted(k);
+  }
+  template <class K>
+  bool is_empty(const K& k) const {
+    assert(settings.use_empty());  // we always need to know what's empty!
+    return key_info.is_empty(k);
   }
   template <typename... Args>
   auto get_key(Args&& ...args) const
@@ -1337,33 +1367,33 @@ class dense_hashtable {
     -> decltype(std::declval<ValInfo>().construct_value(dst, std::forward<Args>(args)...)) {
     return val_info.construct_value(dst, std::forward<Args>(args)...);
   }
-  void set_key(pointer v, const key_type& k) const { key_info.set_key(v, k); }
-  void construct_key(pointer v, const key_type& k) const { key_info.construct_key(v, k); }
+  void set_deleted(value_type& v) const { key_info.make_deleted(v); }
+  void construct_empty(pointer v) const { key_info.construct_empty(v); }
 
  private:
   // Actual data
   Settings settings;
-  KeyInfo key_info;
+  KeyInfo key_info; // holds deleted key
 
   size_type num_deleted;  // how many occupied buckets are marked deleted
   size_type num_elements;
   size_type num_buckets;
-  ValInfo val_info;  // holds emptyval, and also the allocator
+  ValInfo val_info;  // holds empty key, and also the allocator
   pointer table;
 };
 
 // We need a global swap as well
-template <class V, class K, class HF, class ExK, class SetK, class CV, class EqK, class A>
-inline void swap(dense_hashtable<V, K, HF, ExK, SetK, CV, EqK, A>& x,
-                 dense_hashtable<V, K, HF, ExK, SetK, CV, EqK, A>& y) {
+template <class V, class K, class HF, class ExK, class DelK, class EmK, class CV, class EqK, class A>
+inline void swap(dense_hashtable<V, K, HF, ExK, DelK, EmK, CV, EqK, A>& x,
+                 dense_hashtable<V, K, HF, ExK, DelK, EmK, CV, EqK, A>& y) {
   x.swap(y);
 }
 
 #undef JUMP_
 
-template <class V, class K, class HF, class ExK, class SetK, class CV, class EqK, class A>
-const typename dense_hashtable<V, K, HF, ExK, SetK, CV, EqK, A>::size_type
-    dense_hashtable<V, K, HF, ExK, SetK, CV, EqK, A>::ILLEGAL_BUCKET;
+template <class V, class K, class HF, class ExK, class DelK, class EmK, class CV, class EqK, class A>
+const typename dense_hashtable<V, K, HF, ExK, DelK, EmK, CV, EqK, A>::size_type
+    dense_hashtable<V, K, HF, ExK, DelK, EmK, CV, EqK, A>::ILLEGAL_BUCKET;
 
 // How full we let the table get before we resize.  Knuth says .8 is
 // good -- higher causes us to probe too much, though saves memory.
@@ -1371,14 +1401,14 @@ const typename dense_hashtable<V, K, HF, ExK, SetK, CV, EqK, A>::size_type
 // more space (a trade-off densehashtable explicitly chooses to make).
 // Feel free to play around with different values, though, via
 // max_load_factor() and/or set_resizing_parameters().
-template <class V, class K, class HF, class ExK, class SetK, class CV, class EqK, class A>
-const int dense_hashtable<V, K, HF, ExK, SetK, CV, EqK, A>::HT_OCCUPANCY_PCT = 50;
+template <class V, class K, class HF, class ExK, class DelK, class EmK, class CV, class EqK, class A>
+const int dense_hashtable<V, K, HF, ExK, DelK, EmK, CV, EqK, A>::HT_OCCUPANCY_PCT = 50;
 
 // How empty we let the table get before we resize lower.
 // It should be less than OCCUPANCY_PCT / 2 or we thrash resizing.
-template <class V, class K, class HF, class ExK, class SetK, class CV, class EqK, class A>
-const int dense_hashtable<V, K, HF, ExK, SetK, CV, EqK, A>::HT_EMPTY_PCT =
+template <class V, class K, class HF, class ExK, class DelK, class EmK, class CV, class EqK, class A>
+const int dense_hashtable<V, K, HF, ExK, DelK, EmK, CV, EqK, A>::HT_EMPTY_PCT =
     static_cast<int>(
-        0.4 * dense_hashtable<V, K, HF, ExK, SetK, CV, EqK, A>::HT_OCCUPANCY_PCT);
+        0.4 * dense_hashtable<V, K, HF, ExK, DelK, EmK, CV, EqK, A>::HT_OCCUPANCY_PCT);
 
 }  // namespace google

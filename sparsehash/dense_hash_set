@@ -131,18 +131,32 @@ class dense_hash_set {
       new (dst) Value(std::forward<V>(v));
     }
   };
-  struct SetKey {
-    void operator()(Value* value, const Value& new_key) const {
-      *value = new_key;
+  struct DeletedKey {
+    Value deleted;
+    void set(const Value& v) { deleted = v; }
+    const Value& get() const { return deleted; }
+    bool check(const Value& v, const EqualKey& equal, const ExtractKey&) const {
+      return equal(v, deleted);
     }
-    void operator()(Value* value, const Value& new_key, bool) const {
-        new(value) Value(new_key);
+    void make(Value& value) const {
+      value = deleted;
+    }
+  };
+  struct EmptyKey {
+    Value empty;
+    void set(const Value& v) { empty = v; }
+    const Value& get() const { return empty; }
+    bool check(const Value& v, const EqualKey& equal, const ExtractKey&) const {
+      return equal(v, empty);
+    }
+    void construct(Value* value) const {
+      new (value) Value(empty);
     }
   };
 
   // The actual data
-  typedef dense_hashtable<Value, Value, HashFcn, ExtractKey, SetKey, ConstructValue, EqualKey,
-                          Alloc> ht;
+  typedef dense_hashtable<Value, Value, HashFcn, ExtractKey, DeletedKey, EmptyKey, ConstructValue,
+                          EqualKey, Alloc> ht;
   ht rep;
 
  public:
@@ -185,7 +199,7 @@ class dense_hash_set {
                           const hasher& hf = hasher(),
                           const key_equal& eql = key_equal(),
                           const allocator_type& alloc = allocator_type())
-      : rep(expected_max_items_in_table, hf, eql, ExtractKey(), SetKey(), ConstructValue(), alloc) {
+      : rep(expected_max_items_in_table, hf, eql, ExtractKey(), DeletedKey(), EmptyKey(), ConstructValue(), alloc) {
   }
 
   template <class InputIterator>
@@ -195,7 +209,7 @@ class dense_hash_set {
                  const hasher& hf = hasher(),
                  const key_equal& eql = key_equal(),
                  const allocator_type& alloc = allocator_type())
-      : rep(expected_max_items_in_table, hf, eql, ExtractKey(), SetKey(), ConstructValue(), alloc) {
+      : rep(expected_max_items_in_table, hf, eql, ExtractKey(), DeletedKey(), EmptyKey(), ConstructValue(), alloc) {
     set_empty_key(empty_key_val);
     rep.insert(f, l);
   }

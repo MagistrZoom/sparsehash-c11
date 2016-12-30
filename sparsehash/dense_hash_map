@@ -212,23 +212,45 @@ class dense_hash_map {
       new (dst) ValueT(std::piecewise_construct, std::forward_as_tuple(std::move(key)), std::move(second));
     }
   };
-  struct SetKey {
-    void operator()(std::pair<const Key, T>* value, const Key& new_key) const {
+  struct DeletedKey {
+    typename std::remove_const<Key>::type deleted;
+    void set(const Key& k) { deleted = k; }
+    const Key& get() const { return deleted; }
+    bool check(const Key& k, const EqualKey& equal, const ExtractKey&) const {
+      return equal(deleted, k);
+    }
+    bool check(const ValueT& v, const EqualKey& equal, const ExtractKey& get_key) const {
+      return equal(deleted, get_key(v));
+    }
+    void make(ValueT& value) const {
       using NCKey = typename std::remove_cv<Key>::type;
-      *const_cast<NCKey*>(&value->first) = new_key;
+      const_cast<NCKey&>(value.first) = deleted;
 
       // It would be nice to clear the rest of value here as well, in
       // case it's taking up a lot of memory.  We do this by clearing
       // the value.  This assumes T has a zero-arg constructor!
-      value->second = T();
+      value.second = T();
     }
-    void operator()(std::pair<const Key, T>* value, const Key& new_key, bool) const {
-      new(value) std::pair<const Key, T>(std::piecewise_construct, std::forward_as_tuple(new_key), std::forward_as_tuple());
+  };
+  struct EmptyKey {
+    typename std::remove_const<Key>::type empty;
+    void set(const Key& k) { empty = k; }
+    const Key& get() const { return empty; }
+    bool check(const Key& k, const EqualKey& equal, const ExtractKey&) const {
+      return equal(empty, k);
+    }
+    template <class V>
+    bool check(V&& v, const EqualKey& equal, const ExtractKey& get_key) const {
+      return equal(empty, get_key(std::forward<V>(v)));
+    }
+    void construct(ValueT* value) const {
+      new (value) ValueT(std::piecewise_construct,
+                          std::forward_as_tuple(empty), std::forward_as_tuple());
     }
   };
   // The actual data
-  typedef dense_hashtable<std::pair<const Key, T>, Key, HashFcn, ExtractKey,
-                          SetKey, ConstructValue, EqualKey, Alloc> ht;
+  typedef dense_hashtable<ValueT, Key, HashFcn, ExtractKey,
+                          DeletedKey, EmptyKey, ConstructValue, EqualKey, Alloc> ht;
   ht rep;
 
  public:
@@ -277,8 +299,8 @@ class dense_hash_map {
                           const hasher& hf = hasher(),
                           const key_equal& eql = key_equal(),
                           const allocator_type& alloc = allocator_type())
-      : rep(expected_max_items_in_table, hf, eql, ExtractKey(), SetKey(),
-            ConstructValue(), alloc) {}
+      : rep(expected_max_items_in_table, hf, eql, ExtractKey(), DeletedKey(),
+            EmptyKey(), ConstructValue(), alloc) {}
 
   template <class InputIterator>
   dense_hash_map(InputIterator f, InputIterator l,
@@ -287,8 +309,8 @@ class dense_hash_map {
                  const hasher& hf = hasher(),
                  const key_equal& eql = key_equal(),
                  const allocator_type& alloc = allocator_type())
-      : rep(expected_max_items_in_table, hf, eql, ExtractKey(), SetKey(),
-            ConstructValue(), alloc) {
+      : rep(expected_max_items_in_table, hf, eql, ExtractKey(), DeletedKey(),
+            EmptyKey(), ConstructValue(), alloc) {
     set_empty_key(empty_key_val);
     rep.insert(f, l);
   }

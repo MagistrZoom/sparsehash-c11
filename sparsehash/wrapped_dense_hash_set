@@ -17,10 +17,15 @@ class key_wrapper {
   enum class State { empty, deleted, value };
   State state_;
   T value_;
+  static const key_wrapper empty_value_;
+  static const key_wrapper deleted_value_;
   explicit key_wrapper(State state) : state_(state) {}
  public:
   template <class EqualT>
   struct Equal: public EqualT {
+    Equal() = default;
+    Equal(const EqualT& other): EqualT(other) {}
+    Equal(EqualT&& other): EqualT(std::move(other)) {}
     bool operator() (const key_wrapper& lhs, const key_wrapper& rhs) const {
       return lhs.state_ == rhs.state_ &&
         (lhs.state_ != State::value || EqualT::operator() (lhs.value_, rhs.value_));
@@ -39,6 +44,9 @@ class key_wrapper {
   };
   template <class HashT>
   struct Hash: public HashT {
+    Hash() = default;
+    Hash(const HashT& other): HashT(other) {}
+    Hash(HashT&& other): HashT(std::move(other)) {}
     size_t operator() (const key_wrapper& w) const {
       return HashT::operator() (w.value_);
     }
@@ -46,8 +54,8 @@ class key_wrapper {
       return HashT::operator() (v);
     }
   };
-  static key_wrapper get_empty() { return key_wrapper(State::empty); }
-  static key_wrapper get_deleted() { return key_wrapper(State::deleted); }
+  static const key_wrapper& get_empty() { return empty_value_; }
+  static const key_wrapper& get_deleted() { return deleted_value_; }
   key_wrapper() : state_(State::empty) {}
   key_wrapper(const T& value) : state_(State::value), value_(value) {}
   key_wrapper(T&& value) : state_(State::value), value_(std::move(value)) {}
@@ -64,6 +72,8 @@ class key_wrapper {
   key_wrapper(key_wrapper&&) = default;
   key_wrapper& operator= (const key_wrapper&) = default;
   key_wrapper& operator= (key_wrapper&&) = default;
+  bool is_empty() const { return state_ == State::empty; }
+  bool is_deleted() const { return state_ == State::deleted; }
   T& unwrap() { return value_; }
   const T& unwrap() const { return value_; }
   friend bool operator== (const key_wrapper& lhs, const key_wrapper& rhs) {
@@ -77,6 +87,11 @@ class key_wrapper {
   }
 };
 
+template <class T>
+const key_wrapper<T> key_wrapper<T>::empty_value_(State::empty);
+template <class T>
+const key_wrapper<T> key_wrapper<T>::deleted_value_(State::deleted);
+
 template <class T, class UnderlyingIterator>
 class wrapped_const_iterator
     : public UnderlyingIterator {
@@ -86,6 +101,7 @@ class wrapped_const_iterator
   typedef const T* const_pointer;
   typedef const T& reference;
   typedef const T& const_reference;
+  wrapped_const_iterator() = default;
   explicit wrapped_const_iterator(const UnderlyingIterator& it): UnderlyingIterator(it) {}
   explicit wrapped_const_iterator(UnderlyingIterator&& it): UnderlyingIterator(std::move(it)) {}
   wrapped_const_iterator(const wrapped_const_iterator&) = default;
@@ -139,17 +155,41 @@ class wrapped_dense_hash_set {
       new (dst) wrapped_type(std::forward<V>(v));
     }
   };
-  struct set_key {
-    void operator() (wrapped_type* value, const wrapped_type& key) const {
-      *value = key;
+  struct deleted_key {
+    void set(const wrapped_type&) const {}  // these two methods aren't used
+    const wrapped_type& get() const {       // just for interface compatibility
+      return wrapped_type::get_deleted();
     }
-    void operator() (wrapped_type* value, const wrapped_type& key, bool) const {
-      new (value) wrapped_type(key);
+    bool check(const wrapped_type& w, const equal_key&, const extract_key&) const {
+      return w.is_deleted();
+    }
+    template <class T>
+    bool check(const T&, const equal_key&, const extract_key&) const {
+      return false;
+    }
+    void make(wrapped_type& w) const {
+      w = wrapped_type::get_deleted();
+    }
+  };
+  struct empty_key {
+    void set(const wrapped_type&) const {}  // these two methods aren't used
+    const wrapped_type& get() const {       // just for interface compatibility
+      return wrapped_type::get_empty();
+    }
+    bool check(const wrapped_type& w, const equal_key&, const extract_key&) const {
+      return w.is_empty();
+    }
+    template <class T>
+    bool check(const T&, const equal_key&, const extract_key&) const {
+      return false;
+    }
+    void construct(wrapped_type* value) const {
+      new (value) wrapped_type(wrapped_type::get_empty());
     }
   };
 
-  typedef google::dense_hashtable<wrapped_type, wrapped_type, hash_key, extract_key, set_key,
-                                  construct_value, equal_key, alloc_value> ht;
+  typedef google::dense_hashtable<wrapped_type, wrapped_type, hash_key, extract_key, deleted_key,
+                                  empty_key, construct_value, equal_key, alloc_value> ht;
   ht rep;
  public:
   typedef Value key_type;
@@ -182,7 +222,7 @@ class wrapped_dense_hash_set {
 
   // Accessor functions
   allocator_type get_allocator() const { return rep.get_allocator(); }
-  hasher hash_function() const { return rep.hash_function(); }
+  hasher hash_function() const { return rep.hash_funct(); }
   key_equal key_eq() const { return rep.key_eq(); }
 
   // Constructors
@@ -190,7 +230,7 @@ class wrapped_dense_hash_set {
                                   const hasher& hf = hasher(),
                                   const key_equal& eql = key_equal(),
                                   const allocator_type& alloc = allocator_type())
-      : rep(expected_max_items_in_table, hf, eql, extract_key(), set_key(), construct_value(), alloc) {
+      : rep(expected_max_items_in_table, hf, eql, extract_key(), deleted_key(), empty_key(), construct_value(), alloc) {
     rep.set_empty_key(wrapped_type::get_empty());
     rep.set_deleted_key(wrapped_type::get_deleted());
   }
@@ -201,7 +241,7 @@ class wrapped_dense_hash_set {
                          const hasher& hf = hasher(),
                          const key_equal& eql = key_equal(),
                          const allocator_type& alloc = allocator_type())
-      : rep(expected_max_items_in_table, hf, eql, extract_key(), set_key(), construct_value(), alloc) {
+      : rep(expected_max_items_in_table, hf, eql, extract_key(), deleted_key(), empty_key(), construct_value(), alloc) {
     rep.set_empty_key(wrapped_type::get_empty());
     rep.set_deleted_key(wrapped_type::get_deleted());
     rep.insert(f, l);
@@ -306,44 +346,6 @@ class wrapped_dense_hash_set {
   }
   friend bool operator!= (const wrapped_dense_hash_set& lhs, const wrapped_dense_hash_set& rhs) {
     return lhs.rep != rhs.rep;
-  }
-  
-  // I/O -- this is an add-on for writing metainformation to disk
-  //
-  // For maximum flexibility, this does not assume a particular
-  // file type (though it will probably be a FILE *).  We just pass
-  // the fp through to rep.
-
-  // If your keys and values are simple enough, you can pass this
-  // serializer to serialize()/unserialize().  "Simple enough" means
-  // value_type is a POD type that contains no pointers.  Note,
-  // however, we don't try to normalize endianness.
-  typedef typename ht::NopointerSerializer NopointerSerializer;
-
-  // serializer: a class providing operator()(OUTPUT*, const value_type&)
-  //    (writing value_type to OUTPUT).  You can specify a
-  //    NopointerSerializer object if appropriate (see above).
-  // fp: either a FILE*, OR an ostream*/subclass_of_ostream*, OR a
-  //    pointer to a class providing size_t Write(const void*, size_t),
-  //    which writes a buffer into a stream (which fp presumably
-  //    owns) and returns the number of bytes successfully written.
-  //    Note basic_ostream<not_char> is not currently supported.
-  template <typename ValueSerializer, typename OUTPUT>
-  bool serialize(ValueSerializer serializer, OUTPUT* fp) {
-    return rep.serialize(serializer, fp);
-  }
-
-  // serializer: a functor providing operator()(INPUT*, value_type*)
-  //    (reading from INPUT and into value_type).  You can specify a
-  //    NopointerSerializer object if appropriate (see above).
-  // fp: either a FILE*, OR an istream*/subclass_of_istream*, OR a
-  //    pointer to a class providing size_t Read(void*, size_t),
-  //    which reads into a buffer from a stream (which fp presumably
-  //    owns) and returns the number of bytes successfully read.
-  //    Note basic_istream<not_char> is not currently supported.
-  template <typename ValueSerializer, typename INPUT>
-  bool unserialize(ValueSerializer serializer, INPUT* fp) {
-    return rep.unserialize(serializer, fp);
   }
 };
 

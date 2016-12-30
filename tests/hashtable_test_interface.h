@@ -45,12 +45,15 @@
 #pragma once
 
 #include <functional>  // for equal_to<>
+#include <type_traits>
 #include <sparsehash/internal/sparsehashtable.h>
 #include <sparsehash/sparse_hash_map>
 #include <sparsehash/sparse_hash_set>
 #include <sparsehash/internal/densehashtable.h>
 #include <sparsehash/dense_hash_map>
 #include <sparsehash/dense_hash_set>
+#include <sparsehash/wrapped_dense_hash_set>
+#include <sparsehash/wrapped_dense_hash_map>
 
 namespace google {
 
@@ -191,12 +194,13 @@ class BaseHashtableInterface {
                          const allocator_type& alloc)
       : ht_(expected_max_items_in_table, hf, eql, ek, sk, alloc) {}
 
-  template <class ExtractKey, class SetKey, class ConstructValue>
+  template <class ExtractKey, class SetKey, class EmptyKey, class ConstructValue>
   BaseHashtableInterface(size_type expected_max_items_in_table,
                          const hasher& hf, const key_equal& eql,
                          const ExtractKey& ek, const SetKey& sk,
-                         const ConstructValue& cv, const allocator_type& alloc)
-      : ht_(expected_max_items_in_table, hf, eql, ek, sk, cv, alloc) {}
+                         const EmptyKey& emk, const ConstructValue& cv,
+                         const allocator_type& alloc)
+      : ht_(expected_max_items_in_table, hf, eql, ek, sk, emk, cv, alloc) {}
 
   void clear() { ht_.clear(); }
   void swap(BaseHashtableInterface& other) { ht_.swap(other.ht_); }
@@ -886,12 +890,13 @@ void swap(HashtableInterface_DenseHashSet<K, Empty, H, E, A>& a,
 // value saying what the empty key is.
 
 template <class Value, class Key, const Key& EMPTY_KEY, class HashFcn,
-          class ExtractKey, class SetKey, class ConstructValue, class EqualKey, class Alloc>
+          class ExtractKey, class SetKey, class EmptyKey, class ConstructValue,
+          class EqualKey, class Alloc>
 class HashtableInterface_DenseHashtable
     : public BaseHashtableInterface<dense_hashtable<
-          Value, Key, HashFcn, ExtractKey, SetKey, ConstructValue, EqualKey, Alloc> > {
+          Value, Key, HashFcn, ExtractKey, SetKey, EmptyKey, ConstructValue, EqualKey, Alloc> > {
  private:
-  typedef dense_hashtable<Value, Key, HashFcn, ExtractKey, SetKey, ConstructValue, EqualKey,
+  typedef dense_hashtable<Value, Key, HashFcn, ExtractKey, SetKey, EmptyKey, ConstructValue, EqualKey,
                           Alloc> ht;
   typedef BaseHashtableInterface<ht> p;  // parent
 
@@ -902,7 +907,7 @@ class HashtableInterface_DenseHashtable
       const typename p::key_equal& eql = typename p::key_equal(),
       const typename p::allocator_type& alloc = typename p::allocator_type())
       : BaseHashtableInterface<ht>(expected_max_items, hf, eql, ExtractKey(),
-                                   SetKey(), ConstructValue(), alloc) {
+                                   SetKey(), EmptyKey(), ConstructValue(), alloc) {
     this->set_empty_key(EMPTY_KEY);
   }
 
@@ -914,7 +919,7 @@ class HashtableInterface_DenseHashtable
       const typename p::key_equal& eql = typename p::key_equal(),
       const typename p::allocator_type& alloc = typename p::allocator_type())
       : BaseHashtableInterface<ht>(expected_max_items, hf, eql, ExtractKey(),
-                                   SetKey(), ConstructValue(), alloc) {
+                                   SetKey(), EmptyKey(), ConstructValue(), alloc) {
     this->set_empty_key(EMPTY_KEY);
     this->insert(f, l);
   }
@@ -992,11 +997,11 @@ class HashtableInterface_DenseHashtable
 
  protected:
   template <class V2, class K2, const K2& Empty2, class HF2, class EK2,
-            class SK2, class CV2, class Eq2, class A2>
+            class SK2, class EmK2, class CV2, class Eq2, class A2>
   friend void swap(HashtableInterface_DenseHashtable<V2, K2, Empty2, HF2, EK2,
-                                                     SK2, CV2, Eq2, A2>& a,
+                                                     SK2, EmK2, CV2, Eq2, A2>& a,
                    HashtableInterface_DenseHashtable<V2, K2, Empty2, HF2, EK2,
-                                                     SK2, CV2, Eq2, A2>& b);
+                                                     SK2, EmK2, CV2, Eq2, A2>& b);
 
   typename p::key_type it_to_key(const typename p::iterator& it) const {
     return extract_key(*it);
@@ -1017,10 +1022,255 @@ class HashtableInterface_DenseHashtable
 };
 
 template <class V, class K, const K& Empty, class HF, class EK, class SK,
-          class CV, class Eq, class A>
+          class EmK, class CV, class Eq, class A>
 void swap(
-    HashtableInterface_DenseHashtable<V, K, Empty, HF, EK, SK, CV, Eq, A>& a,
-    HashtableInterface_DenseHashtable<V, K, Empty, HF, EK, SK, CV, Eq, A>& b) {
+    HashtableInterface_DenseHashtable<V, K, Empty, HF, EK, SK, EmK, CV, Eq, A>& a,
+    HashtableInterface_DenseHashtable<V, K, Empty, HF, EK, SK, EmK, CV, Eq, A>& b) {
+  swap(a.ht_, b.ht_);
+}
+
+// ---------------------------------------------------------------------
+
+template <class Value, class HashFcn = std::hash<Value>,
+          class EqualKey = std::equal_to<Value>,
+          template <class...> class Alloc = libc_allocator_with_realloc>
+class HashtableInterface_WrappedDenseHashSet
+    : public BaseHashtableInterface<
+          sparsehash::wrapped_dense_hash_set<Value, HashFcn, EqualKey, Alloc>> {
+ private:
+  typedef sparsehash::wrapped_dense_hash_set<Value, HashFcn, EqualKey, Alloc> ht;
+  typedef BaseHashtableInterface<ht> p;  // parent
+
+ public:
+  explicit HashtableInterface_WrappedDenseHashSet(
+      typename p::size_type expected_max_items = 0,
+      const typename p::hasher& hf = typename p::hasher(),
+      const typename p::key_equal& eql = typename p::key_equal(),
+      const typename p::allocator_type& alloc = typename p::allocator_type())
+      : BaseHashtableInterface<ht>(expected_max_items, hf, eql, alloc) {
+  }
+
+  template <class InputIterator>
+  HashtableInterface_WrappedDenseHashSet(
+      InputIterator f, InputIterator l,
+      typename p::size_type expected_max_items = 0,
+      const typename p::hasher& hf = typename p::hasher(),
+      const typename p::key_equal& eql = typename p::key_equal(),
+      const typename p::allocator_type& alloc = typename p::allocator_type())
+      : BaseHashtableInterface<ht>(f, l, expected_max_items, hf, eql,
+                                   alloc) {}
+
+  void clear_no_resize() { this->ht_.clear_no_resize(); }
+
+  template <typename AssignValue>
+  bool bracket_equal(const typename p::key_type& key, const AssignValue&) {
+    return this->ht_.find(key) != this->ht_.end();
+  }
+
+  template <typename AssignValue>
+  void bracket_assign(const typename p::key_type& key, const AssignValue&) {
+    this->ht_.insert(key);
+  }
+
+  typename p::key_type get_key(const typename p::value_type& value) const {
+    return value;
+  }
+  bool get_data(const typename p::value_type&) const { return true; }
+  bool default_data() const { return true; }
+
+  bool supports_clear_no_resize() const { return true; }
+  bool supports_empty_key() const { return false; }
+  bool supports_deleted_key() const { return false; }
+  bool supports_brackets() const { return false; }
+  bool supports_readwrite() const { return false; }
+  bool supports_num_table_copies() const { return false; }
+  bool supports_serialization() const { return false; }
+
+  typedef std::false_type NopointerSerializer;
+  template <typename OUTPUT>
+  bool write_metadata(OUTPUT*) {
+    return false;
+  }
+  template <typename INPUT>
+  bool read_metadata(INPUT*) {
+    return false;
+  }
+  template <typename OUTPUT>
+  bool write_nopointer_data(OUTPUT*) {
+    return false;
+  }
+  template <typename INPUT>
+  bool read_nopointer_data(INPUT*) {
+    return false;
+  }
+  template <typename ValueSerializer, typename OUTPUT>
+  bool serialize(ValueSerializer, OUTPUT*) {
+    return false;
+  }
+  template <typename ValueSerializer, typename INPUT>
+  bool unserialize(ValueSerializer, INPUT*) {
+    return false;
+  }
+
+  int num_table_copies() const { return 0; }
+
+  typename p::hasher hash_funct() const { return p::hash_function(); }
+
+  void set_resizing_parameters(float shrink, float grow) {
+    this->ht_.min_load_factor(shrink);
+    this->ht_.max_load_factor(grow);
+  }
+
+  void set_empty_key(const Value&) {}
+  void clear_empty_key() {}
+  Value empty_key() const { return Value(); }
+
+  void set_deleted_key(const Value&) {}
+  void clear_deleted_key() {}
+  Value deleted_key() const { return Value(); }
+ protected:
+  template <class K2, class H2, class E2, template <class...> class A2>
+  friend void swap(HashtableInterface_WrappedDenseHashSet<K2, H2, E2, A2>& a,
+                   HashtableInterface_WrappedDenseHashSet<K2, H2, E2, A2>& b);
+
+  typename p::key_type it_to_key(const typename p::iterator& it) const {
+    return *it;
+  }
+  typename p::key_type it_to_key(const typename p::const_iterator& it) const {
+    return *it;
+  }
+  typename p::key_type it_to_key(const typename p::local_iterator& it) const {
+    return *it;
+  }
+  typename p::key_type it_to_key(
+      const typename p::const_local_iterator& it) const {
+    return *it;
+  }
+};
+
+template <class K, class H, class E, template <class...> class A>
+void swap(HashtableInterface_WrappedDenseHashSet<K, H, E, A>& a,
+          HashtableInterface_WrappedDenseHashSet<K, H, E, A>& b) {
+  swap(a.ht_, b.ht_);
+}
+
+// ---------------------------------------------------------------------
+
+template <class Key, class T,
+          class HashFcn = std::hash<Key>, class EqualKey = std::equal_to<Key>,
+          template <class...> class Alloc = libc_allocator_with_realloc>
+class HashtableInterface_WrappedDenseHashMap
+    : public BaseHashtableInterface<
+          sparsehash::wrapped_dense_hash_map<Key, T, HashFcn, EqualKey, Alloc>> {
+ private:
+  typedef sparsehash::wrapped_dense_hash_map<Key, T, HashFcn, EqualKey, Alloc> ht;
+  typedef BaseHashtableInterface<ht> p;  // parent
+
+ public:
+  explicit HashtableInterface_WrappedDenseHashMap(
+      typename p::size_type expected_max_items = 0,
+      const typename p::hasher& hf = typename p::hasher(),
+      const typename p::key_equal& eql = typename p::key_equal(),
+      const typename p::allocator_type& alloc = typename p::allocator_type())
+      : BaseHashtableInterface<ht>(expected_max_items, hf, eql, alloc) {
+  }
+
+  template <class InputIterator>
+  HashtableInterface_WrappedDenseHashMap(
+      InputIterator f, InputIterator l,
+      typename p::size_type expected_max_items = 0,
+      const typename p::hasher& hf = typename p::hasher(),
+      const typename p::key_equal& eql = typename p::key_equal(),
+      const typename p::allocator_type& alloc = typename p::allocator_type())
+      : BaseHashtableInterface<ht>(f, l, expected_max_items, hf, eql,
+                                   alloc) {}
+
+  void clear_no_resize() { this->ht_.clear_no_resize(); }
+
+  typename p::key_type get_key(const typename p::value_type& value) const {
+    return value.first;
+  }
+  typename ht::mapped_type get_data(const typename p::value_type& value) const {
+    return value.second;
+  }
+  typename ht::mapped_type default_data() const {
+    return typename ht::mapped_type();
+  }
+
+  bool supports_clear_no_resize() const { return true; }
+  bool supports_empty_key() const { return false; }
+  bool supports_deleted_key() const { return false; }
+  bool supports_brackets() const { return true; }
+  bool supports_readwrite() const { return false; }
+  bool supports_num_table_copies() const { return false; }
+  bool supports_serialization() const { return false; }
+
+  typedef std::false_type NopointerSerializer;
+  template <typename OUTPUT>
+  bool write_metadata(OUTPUT*) {
+    return false;
+  }
+  template <typename INPUT>
+  bool read_metadata(INPUT*) {
+    return false;
+  }
+  template <typename OUTPUT>
+  bool write_nopointer_data(OUTPUT*) {
+    return false;
+  }
+  template <typename INPUT>
+  bool read_nopointer_data(INPUT*) {
+    return false;
+  }
+  template <typename ValueSerializer, typename OUTPUT>
+  bool serialize(ValueSerializer, OUTPUT*) {
+    return false;
+  }
+  template <typename ValueSerializer, typename INPUT>
+  bool unserialize(ValueSerializer, INPUT*) {
+    return false;
+  }
+
+  int num_table_copies() const { return 0; }
+
+  typename p::hasher hash_funct() const { return p::hash_function(); }
+
+  void set_resizing_parameters(float shrink, float grow) {
+    this->ht_.min_load_factor(shrink);
+    this->ht_.max_load_factor(grow);
+  }
+
+  void set_empty_key(const Key&) {}
+  void clear_empty_key() {}
+  Key empty_key() const { return Key(); }
+
+  void set_deleted_key(const Key&) {}
+  void clear_deleted_key() {}
+  Key deleted_key() const { return Key(); }
+ protected:
+  template <class K2, class T2, class H2, class E2, template <class...> class A2>
+  friend void swap(
+      HashtableInterface_WrappedDenseHashMap<K2, T2, H2, E2, A2>& a,
+      HashtableInterface_WrappedDenseHashMap<K2, T2, H2, E2, A2>& b);
+
+  typename p::key_type it_to_key(const typename p::iterator& it) const {
+    return it->first;
+  }
+  typename p::key_type it_to_key(const typename p::const_iterator& it) const {
+    return it->first;
+  }
+  typename p::key_type it_to_key(const typename p::local_iterator& it) const {
+    return it->first;
+  }
+  typename p::key_type it_to_key(
+      const typename p::const_local_iterator& it) const {
+    return it->first;
+  }
+};
+
+template <class K, class T, class H, class E, template <class...> class A>
+void swap(HashtableInterface_WrappedDenseHashMap<K, T, H, E, A>& a,
+          HashtableInterface_WrappedDenseHashMap<K, T, H, E, A>& b) {
   swap(a.ht_, b.ht_);
 }
 

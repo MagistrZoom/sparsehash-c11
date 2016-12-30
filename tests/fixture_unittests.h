@@ -27,6 +27,8 @@ using google::HashtableInterface_SparseHashtable;
 using google::HashtableInterface_DenseHashMap;
 using google::HashtableInterface_DenseHashSet;
 using google::HashtableInterface_DenseHashtable;
+using google::HashtableInterface_WrappedDenseHashSet;
+using google::HashtableInterface_WrappedDenseHashMap;
 namespace sparsehash_internal = google::sparsehash_internal;
 
 using namespace testing;
@@ -84,11 +86,80 @@ struct SetKey {
   void operator()(KeyAndValueT* value, const KeyAndValueT& new_key) const {
     *value = KeyToValue()(new_key);
   }
-  void operator()(KeyAndValueT* value, const KeyAndValueT& new_key, bool) const {
+};
+
+/*
+template <class KeyAndValueT, class KeyToValue>
+struct EmptyKey {
+  KeyAndValueT empty;
+  KeyAndValueT unchanged_empty;
+  void set(const KeyAndValueT& key) {
+    empty = KeyToValue()(key);
+    unchanged_empty = key;
+  }
+  const KeyAndValueT& get() const { return unchanged_empty; }
+  template <class Equal>
+  bool check(const KeyAndValueT& v, const Equal& equal) const {
+    return equal(empty, v);
+  }
+  void construct(KeyAndValueT* value) const {
     new (value) KeyAndValueT();
-    *value = KeyToValue()(new_key);
+    *value = KeyToValue()(empty);
   }
 };
+template <class T, class Transform>
+struct DeletedKey {
+  T deleted;
+  T raw_deleted;
+  void set(const T& t) {
+    deleted = Transform()(t);
+    raw_deleted = t;
+  }
+  const T& get() const {
+    return raw_deleted;
+  }
+  template <class Equal, class Extract>
+  bool check(const T& t, const Equal& equal, const Extract& extract) const {
+    return equal(deleted, extract(t));
+  }
+  void make(T& t) const {
+    t = raw_deleted;
+  }
+};
+*/
+
+template <class T, class Transform, class Tag>
+struct SpecialKey {
+  typedef Transform Extract; // here extract is identical with transform, see usage
+  T value;
+  T raw_value;
+  void set(const T& t) {
+    value = Transform()(t);
+    raw_value = t;
+  }
+  const T& get() const {
+    return raw_value;
+  }
+  template <class Equal>
+  bool check(const T& t, const Equal& equal, const Extract& extract) const {
+    return equal(value, extract(t));
+  }
+  void make(T& t) const {
+    t = raw_value;
+  }
+  void construct(T* t) const {
+    new (t) T();
+    *t = raw_value;
+  }
+};
+
+struct deleted_key_tag {};
+template <class T, class Transform>
+using DeletedKey = SpecialKey<T, Transform, deleted_key_tag>;
+
+struct empty_key_tag {};
+template <class T, class Transform>
+using EmptyKey = SpecialKey<T, Transform, empty_key_tag>;
 
 template <class Key, class Value>
 struct TrivialCV {
@@ -212,6 +283,9 @@ struct Alloc {
   int* count_;
 };
 
+template <class T>
+using AllocD = Alloc<T>;
+
 // Below are a few fun routines that convert a value into a key, used
 // for dense_hashtable and sparse_hashtable.  It's our responsibility
 // to make sure, when we insert values into these objects, that the
@@ -296,9 +370,14 @@ extern const char* const kDeletedCharStar;
                                       Alloc<int>>,                           \
       HashtableInterface_DenseHashSet<int, kEmptyInt, Hasher, Hasher,        \
                                       Alloc<int>>,                           \
+      HashtableInterface_WrappedDenseHashSet<int, Hasher, Hasher,            \
+                                      AllocD>,                               \
+      HashtableInterface_WrappedDenseHashMap<int, int, Hasher, Hasher,       \
+                                      AllocD>,                               \
       HashtableInterface_DenseHashtable<                                     \
           int, int, kEmptyInt, Hasher, Negation<int>,                        \
-          SetKey<int, Negation<int>>, TrivialCV<int, int>, Hasher, Alloc<int>>
+          DeletedKey<int, Negation<int>>, EmptyKey<int, Negation<int>>,      \
+          TrivialCV<int, int>, Hasher, Alloc<int>>
 
 // Third table has key associated with a value of Cap(value)
 #define STRING_HASHTABLES                                                      \
@@ -312,8 +391,13 @@ extern const char* const kDeletedCharStar;
                                       Hasher, Alloc<string>>,                  \
       HashtableInterface_DenseHashSet<string, kEmptyString, Hasher, Hasher,    \
                                       Alloc<string>>,                          \
+      HashtableInterface_WrappedDenseHashSet<string, Hasher, Hasher,           \
+                                      AllocD>,                                 \
+      HashtableInterface_WrappedDenseHashMap<string, string, Hasher, Hasher,   \
+                                      AllocD>,                                 \
       HashtableInterface_DenseHashtable<string, string, kEmptyString, Hasher,  \
-                                        Capital, SetKey<string, Capital>,      \
+                                        Capital, DeletedKey<string, Capital>,  \
+                                        EmptyKey<string, Capital>,             \
                                         TrivialCV<string, string>, Hasher,     \
                                         Alloc<string>>
 
@@ -333,10 +417,14 @@ extern const char* const kDeletedCharStar;
                                       Hasher, Hasher, Alloc<const char*>>,    \
       HashtableInterface_DenseHashSet<const char*, kEmptyCharStar, Hasher,    \
                                       Hasher, Alloc<const char*>>,            \
+      HashtableInterface_WrappedDenseHashSet<const char*, Hasher, Hasher,     \
+                                      AllocD>,                                \
+      HashtableInterface_WrappedDenseHashMap<const char*, ValueType, Hasher,  \
+                                      Hasher, AllocD>,                        \
       HashtableInterface_DenseHashtable<                                      \
           const char*, const char*, kEmptyCharStar, Hasher, Identity,         \
-          SetKey<const char*, Identity>, TrivialCV<const char*, const char*>, \
-          Hasher, Alloc<ValueType>>
+          DeletedKey<const char*, Identity>, EmptyKey<const char*, Identity>, \
+          TrivialCV<const char*, const char*>, Hasher, Alloc<ValueType>>
 
 // This is the list of types we run each test against.
 // We need to define the same class 4 times due to limitations in the

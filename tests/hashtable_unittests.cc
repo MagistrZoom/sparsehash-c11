@@ -56,6 +56,7 @@
 #include <vector>
 #include <type_traits>
 #include <sparsehash/sparsetable>
+#include <sparsehash/wrapped_dense_hash_map>
 #include <sparsehash/wrapped_dense_hash_set>
 #include "hashtable_test_interface.h"
 #include "fixture_unittests.h"
@@ -256,6 +257,19 @@ TEST(HashtableTest, ModifyViaIterator) {
     it = ht.find(1);
     EXPECT_TRUE(it != ht.end());
     EXPECT_EQ(5, it->second);
+  }
+  {
+    wrapped_dense_hash_map<int, int> wht;
+    wht[1] = 2;
+    auto it = wht.find(1);
+    EXPECT_TRUE(it != wht.end());
+    EXPECT_EQ(1, it->first);
+    EXPECT_EQ(2, it->second);
+    it->second = 5;
+    it = wht.find(1);
+    EXPECT_TRUE(it != wht.end());
+    EXPECT_EQ(5, it->second);
+    EXPECT_EQ(5, wht.at(1));
   }
 }
 
@@ -469,8 +483,10 @@ TYPED_TEST(HashtableAllTest, Swap) {
 
   this->ht_.swap(other_ht);
 
-  EXPECT_EQ(this->UniqueKey(2), this->ht_.deleted_key());
-  EXPECT_EQ(this->UniqueKey(1), other_ht.deleted_key());
+  if (this->ht_.supports_deleted_key()) {
+    EXPECT_EQ(this->UniqueKey(2), this->ht_.deleted_key());
+    EXPECT_EQ(this->UniqueKey(1), other_ht.deleted_key());
+  }
 
   EXPECT_EQ(1, this->ht_.hash_funct().id());
   EXPECT_EQ(0, other_ht.hash_funct().id());
@@ -502,8 +518,10 @@ TYPED_TEST(HashtableAllTest, Swap) {
   swap(this->ht_, other_ht);
 #endif
 
-  EXPECT_EQ(this->UniqueKey(1), this->ht_.deleted_key());
-  EXPECT_EQ(this->UniqueKey(2), other_ht.deleted_key());
+  if (this->ht_.supports_deleted_key()) {
+    EXPECT_EQ(this->UniqueKey(1), this->ht_.deleted_key());
+    EXPECT_EQ(this->UniqueKey(2), other_ht.deleted_key());
+  }
   EXPECT_EQ(0, this->ht_.hash_funct().id());
   EXPECT_EQ(1, other_ht.hash_funct().id());
   EXPECT_EQ(1996u, this->ht_.size());
@@ -911,6 +929,22 @@ TEST(HashtableTest, InsertValueToMap) {
   EXPECT_EQ(2, dhm_it.first->first);
   EXPECT_EQ(4, dhm_it.first->second);
   EXPECT_EQ(4, dhm[2]);
+
+  // Again, with wrapped_dense_hash_map.
+  wrapped_dense_hash_map<int, int> wdhm;
+  wdhm[1] = 2;  // test a different method of inserting
+  auto wdhm_it = wdhm.insert(pair<const int, int>(1, 3));
+  EXPECT_FALSE(wdhm_it.second);
+  EXPECT_EQ(1, wdhm_it.first->first);
+  EXPECT_EQ(2, wdhm_it.first->second);
+  wdhm_it.first->second = 20;
+  EXPECT_EQ(20, wdhm[1]);
+
+  wdhm_it = wdhm.insert(pair<const int, int>(2, 4));
+  EXPECT_TRUE(wdhm_it.second);
+  EXPECT_EQ(2, wdhm_it.first->first);
+  EXPECT_EQ(4, wdhm_it.first->second);
+  EXPECT_EQ(4, wdhm[2]);
 }
 
 TYPED_TEST(HashtableStringTest, EmptyKey) {
@@ -1347,6 +1381,9 @@ TEST(HashtableTest, ConstKey) {
   dhm.set_empty_key(1);
   dhm.set_deleted_key(2);
   dhm[10] = 20;
+
+  wrapped_dense_hash_map<const int, int, Hasher, Hasher> wdhm;
+  wdhm[10] = 20;
 }
 
 TYPED_TEST(HashtableAllTest, ResizeActuallyResizes) {
@@ -1461,6 +1498,9 @@ TEST(HashtableTest, ResizeWithoutShrink) {
 TEST(HashtableDeathTest, ResizeOverflow) {
   dense_hash_map<int, int> ht;
   EXPECT_THROW(ht.resize(static_cast<size_t>(-1)), std::length_error);
+
+  wrapped_dense_hash_map<int, int> wht;
+  EXPECT_THROW(wht.resize(static_cast<size_t>(-1)), std::length_error);
 
   sparse_hash_map<int, int> ht2;
   EXPECT_THROW(ht2.resize(static_cast<size_t>(-1)), std::length_error);
