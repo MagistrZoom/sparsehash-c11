@@ -52,4 +52,17 @@ struct is_relocatable<std::pair<T, U>>
 
 template <class T>
 struct is_relocatable<const T> : is_relocatable<T> {};
+
+// check function object for callability with given arguments;
+// trait will become standard in C++17;
+// implementation is taken from http://stackoverflow.com/a/37161919/6936672
+template<class F, class...Args>
+struct is_callable
+{
+    template<class U> static auto test(U* p) -> decltype((*p)(std::declval<Args>()...), void(), std::true_type());
+    template<class U> static auto test(...) -> decltype(std::false_type());
+
+    static constexpr bool value = decltype(test<F>(0))::value;
+};
+
 }

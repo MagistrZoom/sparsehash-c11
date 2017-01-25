@@ -1071,7 +1071,10 @@ class dense_hashtable {
   }
 
   // DELETION ROUTINES
-  size_type erase(const key_type& key) {
+  template <class K,
+            class = typename std::enable_if<!std::is_base_of<iterator, K>::value &&
+                                            !std::is_base_of<const_iterator, K>::value>::type>
+  size_type erase(const K& key) {
     // First, double-check we're not trying to erase delkey or emptyval.
     assert(
         (!settings.use_empty() || !is_empty(key)) &&

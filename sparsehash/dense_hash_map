@@ -103,6 +103,7 @@
 #include <type_traits> // for enable_if, is_constructible, etc
 #include <sparsehash/internal/densehashtable.h>  // IWYU pragma: export
 #include <sparsehash/internal/libc_allocator_with_realloc.h>
+#include "traits"
 
 namespace google {
 
@@ -112,6 +113,18 @@ template <class Key, class T, class HashFcn = std::hash<Key>,
 class dense_hash_map {
  private:
   typedef std::pair<const Key, T> ValueT;
+  typedef typename std::remove_const<Key>::type NonconstKey;
+  template <class K>
+  struct is_key_substitute {
+    typedef typename std::decay<K>::type KeyT;
+    static constexpr bool value =
+        is_callable<EqualKey, const KeyT&, const NonconstKey&>::value &&
+        is_callable<HashFcn, const KeyT&>::value;
+  };
+  template <class K, class R = void>
+  using key_comparable = typename std::enable_if<is_key_substitute<K>::value, R>::type;
+  template <class K, class R = void>
+  using non_key_comparable = typename std::enable_if<!is_key_substitute<K>::value, R>::type;
   // Before we do something with a Value, we need to compute
   // its hash. So even if an user wants an in-place construction,
   // we have to construct a Key before we could fully construct
@@ -187,6 +200,12 @@ class dense_hash_map {
     void operator()(void* dst, const Key&, Args&& ...args) const {
       new (dst) ValueT(std::forward<Args>(args)...);
     }
+    template <class K, class... Args>
+    auto operator()(void* dst, const K&, Args&& ...args) const
+      -> key_comparable<K, void>
+    {
+      new (dst) ValueT(std::forward<Args>(args)...);
+    }
     // 3rd case - we are forwarding r-value reference to a Key and
     // extracting payload constructor's arguments.
     // We can do that because Map's emplace method accepts the same arguments
@@ -213,14 +232,20 @@ class dense_hash_map {
     }
   };
   struct DeletedKey {
-    typename std::remove_const<Key>::type deleted;
+    NonconstKey deleted;
     void set(const Key& k) { deleted = k; }
     const Key& get() const { return deleted; }
     bool check(const Key& k, const EqualKey& equal, const ExtractKey&) const {
-      return equal(deleted, k);
+      return equal(k, deleted);
     }
     bool check(const ValueT& v, const EqualKey& equal, const ExtractKey& get_key) const {
-      return equal(deleted, get_key(v));
+      return equal(get_key(v), deleted);
+    }
+    template <class K>
+    auto check(const K& k, const EqualKey& equal, const ExtractKey&) const
+      -> key_comparable<K, bool>
+    {
+      return equal(k, deleted);
     }
     void make(ValueT& value) const {
       using NCKey = typename std::remove_cv<Key>::type;
@@ -233,15 +258,23 @@ class dense_hash_map {
     }
   };
   struct EmptyKey {
-    typename std::remove_const<Key>::type empty;
+    NonconstKey empty;
     void set(const Key& k) { empty = k; }
     const Key& get() const { return empty; }
     bool check(const Key& k, const EqualKey& equal, const ExtractKey&) const {
-      return equal(empty, k);
+      return equal(k, empty);
+    }
+    template <class K>
+    auto check(const K& k, const EqualKey& equal, const ExtractKey&) const
+      -> key_comparable<K, bool>
+    {
+      return equal(k, empty);
     }
     template <class V>
-    bool check(V&& v, const EqualKey& equal, const ExtractKey& get_key) const {
-      return equal(empty, get_key(std::forward<V>(v)));
+    auto check(V&& v, const EqualKey& equal, const ExtractKey& get_key) const
+      -> non_key_comparable<V, bool>
+    {
+      return equal(get_key(std::forward<V>(v)), empty);
     }
     void construct(ValueT* value) const {
       new (value) ValueT(std::piecewise_construct,
@@ -273,6 +306,9 @@ class dense_hash_map {
   typedef typename ht::const_iterator const_iterator;
   typedef typename ht::local_iterator local_iterator;
   typedef typename ht::const_local_iterator const_local_iterator;
+
+  template <class K>
+  using accept_as_key = is_key_substitute<K>;
 
   // Iterator functions
   iterator begin() { return rep.begin(); }
@@ -366,26 +402,44 @@ class dense_hash_map {
 
   // Lookup routines
   iterator find(const key_type& key) { return rep.find(key); }
+  template <class K, class = key_comparable<K>>
+  iterator find(const K& key) { return rep.find(key); }
   const_iterator find(const key_type& key) const { return rep.find(key); }
+  template <class K, class = key_comparable<K>>
+  const_iterator find(const K& key) const { return rep.find(key); }
 
-  data_type& operator[](const key_type& key) {  // This is our value-add!
+  data_type& operator[](const key_type& key) {
     // If key is in the hashtable, returns find(key)->second,
     // otherwise returns insert(value_type(key, T()).first->second.
     // Note it does not create an empty T unless the find fails.
     return rep.template find_or_insert<data_type>(key).second;
   }
-
   data_type& operator[](key_type&& key) {
     return rep.template find_or_insert<data_type>(std::move(key)).second;
   }
+  template <class K, class = key_comparable<K>>
+  data_type& operator[](K&& key) {
+    return rep.template find_or_insert<data_type>(std::forward<K>(key)).second;
+  }
 
   size_type count(const key_type& key) const { return rep.count(key); }
+  template <class K, class = key_comparable<K>>
+  size_type count(const K& key) const { return rep.count(key); }
 
   std::pair<iterator, iterator> equal_range(const key_type& key) {
     return rep.equal_range(key);
   }
+  template <class K, class = key_comparable<K>>
+  std::pair<iterator, iterator> equal_range(const K& key) {
+    return rep.equal_range(key);
+  }
   std::pair<const_iterator, const_iterator> equal_range(
       const key_type& key) const {
+    return rep.equal_range(key);
+  }
+  template <class K, class = key_comparable<K>>
+  std::pair<const_iterator, const_iterator> equal_range(
+      const K& key) const {
     return rep.equal_range(key);
   }
 
@@ -437,6 +491,8 @@ class dense_hash_map {
 
   // These are standard
   size_type erase(const key_type& key) { return rep.erase(key); }
+  template <class K, class = key_comparable<K>>
+  size_type erase(const K& key) { return rep.erase(key); }
   iterator erase(const_iterator it) { return rep.erase(it); }
   iterator erase(const_iterator f, const_iterator l) { return rep.erase(f, l); }
 

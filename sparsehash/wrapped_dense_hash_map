@@ -9,6 +9,7 @@
 #include <utility>     // for pair<>
 #include <sparsehash/internal/densehashtable.h>  // IWYU pragma: export
 #include <sparsehash/internal/libc_allocator_with_realloc.h>
+#include "traits"
 
 namespace sparsehash {
 
@@ -45,6 +46,19 @@ class key_value_wrapper {
     bool operator() (const Key& lhs, const Key& rhs) const {
       return EqualT::operator() (lhs, rhs);
     }
+    template <class K>
+    auto operator() (const K& lhs, const key_value_wrapper& rhs) const
+      -> typename std::enable_if<google::is_callable<EqualT, decltype(lhs), decltype(rhs.key())>::value, bool>::type
+    {
+      return rhs.state_ == State::value &&
+        EqualT::operator() (lhs, rhs.key());
+    }
+    template <class K>
+    auto operator() (const K& lhs, const Key& rhs) const
+      -> typename std::enable_if<google::is_callable<EqualT, decltype(lhs), decltype(rhs)>::value, bool>::type
+    {
+      return EqualT::operator() (lhs, rhs);
+    }
   };
   template <class HashT>
   struct Hash: public HashT {
@@ -55,6 +69,12 @@ class key_value_wrapper {
       return HashT::operator() (w.key());
     }
     size_t operator() (const Key& v) const {
+      return HashT::operator() (v);
+    }
+    template <class K>
+    auto operator() (const K& v) const
+      -> typename std::enable_if<google::is_callable<HashT, decltype(v)>::value, size_t>::type
+    {
       return HashT::operator() (v);
     }
   };
@@ -199,6 +219,15 @@ class wrapped_dense_hash_map {
   typedef typename wrapped_type::template Equal<EqualKey> equal_key;
   typedef typename wrapped_type::template Hash<HashFcn> hash_key;
   typedef Alloc<wrapped_type> alloc_value;
+  template <class K>
+  struct is_key_substitute {
+    typedef typename std::decay<K>::type KeyT;
+    static constexpr bool value =
+        google::is_callable<EqualKey, const KeyT&, const Key&>::value &&
+        google::is_callable<HashFcn, const KeyT&>::value;
+  };
+  template <class K>
+  using key_comparable = typename std::enable_if<is_key_substitute<K>::value>::type;
   struct extract_key {
     // simpliest case - we got a value from underlying hashtable
     const Key& operator()(const wrapped_type& w) const {
@@ -254,6 +283,12 @@ class wrapped_dense_hash_map {
     // 2nd case - we are just forwarding the rest of the arguments
     template <typename... Args>
     void operator()(void* dst, const Key&, Args&& ...args) const {
+      new (dst) wrapped_type(std::forward<Args>(args)...);
+    }
+    template <class K, class... Args>
+    auto operator()(void* dst, const K&, Args&& ...args) const
+      -> key_comparable<K>
+    {
       new (dst) wrapped_type(std::forward<Args>(args)...);
     }
     // 3rd case - we are forwarding r-value reference to a Key and
@@ -334,6 +369,9 @@ class wrapped_dense_hash_map {
   typedef typename map_traits::wrapped_const_iterator const_iterator;
   typedef iterator local_iterator;
   typedef const_iterator const_local_iterator;
+
+  template <class K>
+  using accept_as_key = is_key_substitute<K>;
 
   // Iterator functions
   iterator begin() { return iterator(rep.begin()); }
@@ -427,7 +465,11 @@ class wrapped_dense_hash_map {
 
   // Lookup routines
   iterator find(const key_type& key) { return iterator(rep.find(key)); }
+  template <class K, class = key_comparable<K>>
+  iterator find(const K& key) { return iterator(rep.find(key)); }
   const_iterator find(const key_type& key) const { return const_iterator(rep.find(key)); }
+  template <class K, class = key_comparable<K>>
+  const_iterator find(const K& key) const { return const_iterator(rep.find(key)); }
 
   mapped_type& operator[](const key_type& key) {
     // If key is in the hashtable, returns find(key)->second,
@@ -435,9 +477,12 @@ class wrapped_dense_hash_map {
     // Note it does not create an empty T unless the find fails.
     return rep.template find_or_insert<mapped_type>(key).unwrap().second;
   }
-
   mapped_type& operator[](key_type&& key) {
     return rep.template find_or_insert<mapped_type>(std::move(key)).unwrap().second;
+  }
+  template <class K, class = key_comparable<K>>
+  mapped_type& operator[](K&& key) {
+    return rep.template find_or_insert<mapped_type>(std::forward<K>(key)).unwrap().second;
   }
 
   mapped_type& at(const key_type& key) {
@@ -456,14 +501,44 @@ class wrapped_dense_hash_map {
       throw std::out_of_range("no such key in map");
     }
   }
+  template <class K, class = key_comparable<K>>
+  mapped_type& at(const K& key) {
+    auto it = rep.find(key);
+    if (it != rep.end()) {
+      return it->unwrap().second;
+    } else {
+      throw std::out_of_range("no such key in map");
+    }
+  }
+  template <class K, class = key_comparable<K>>
+  const mapped_type& at(const K& key) const {
+    auto it = rep.find(key);
+    if (it != rep.end()) {
+      return it->unwrap().second;
+    } else {
+      throw std::out_of_range("no such key in map");
+    }
+  }
 
   size_type count(const key_type& key) const { return rep.count(key); }
+  template <class K, class = key_comparable<K>>
+  size_type count(const K& key) const { return rep.count(key); }
 
   std::pair<iterator, iterator> equal_range(const key_type& key) {
     auto res = rep.equal_range(key);
     return std::make_pair(iterator(std::move(res.first)), iterator(std::move(res.second)));
   }
+  template <class K, class = key_comparable<K>>
+  std::pair<iterator, iterator> equal_range(const K& key) {
+    auto res = rep.equal_range(key);
+    return std::make_pair(iterator(std::move(res.first)), iterator(std::move(res.second)));
+  }
   std::pair<const_iterator, const_iterator> equal_range(const key_type& key) const {
+    auto res = rep.equal_range(key);
+    return std::make_pair(const_iterator(std::move(res.first)), const_iterator(std::move(res.second)));
+  }
+  template <class K, class = key_comparable<K>>
+  std::pair<const_iterator, const_iterator> equal_range(const K& key) const {
     auto res = rep.equal_range(key);
     return std::make_pair(const_iterator(std::move(res.first)), const_iterator(std::move(res.second)));
   }
@@ -511,6 +586,8 @@ class wrapped_dense_hash_map {
 
   // Deletion routines
   size_type erase(const key_type& key) { return rep.erase(key); }
+  template <class K, class = key_comparable<K>>
+  size_type erase(const K& key) { return rep.erase(key); }
   iterator erase(const_iterator it) { return iterator(rep.erase(it)); }
   iterator erase(const_iterator f, const_iterator l) { return iterator(rep.erase(f, l)); }
 
