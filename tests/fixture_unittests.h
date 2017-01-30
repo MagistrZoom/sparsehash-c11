@@ -88,46 +88,6 @@ struct SetKey {
   }
 };
 
-/*
-template <class KeyAndValueT, class KeyToValue>
-struct EmptyKey {
-  KeyAndValueT empty;
-  KeyAndValueT unchanged_empty;
-  void set(const KeyAndValueT& key) {
-    empty = KeyToValue()(key);
-    unchanged_empty = key;
-  }
-  const KeyAndValueT& get() const { return unchanged_empty; }
-  template <class Equal>
-  bool check(const KeyAndValueT& v, const Equal& equal) const {
-    return equal(empty, v);
-  }
-  void construct(KeyAndValueT* value) const {
-    new (value) KeyAndValueT();
-    *value = KeyToValue()(empty);
-  }
-};
-template <class T, class Transform>
-struct DeletedKey {
-  T deleted;
-  T raw_deleted;
-  void set(const T& t) {
-    deleted = Transform()(t);
-    raw_deleted = t;
-  }
-  const T& get() const {
-    return raw_deleted;
-  }
-  template <class Equal, class Extract>
-  bool check(const T& t, const Equal& equal, const Extract& extract) const {
-    return equal(deleted, extract(t));
-  }
-  void make(T& t) const {
-    t = raw_deleted;
-  }
-};
-*/
-
 template <class T, class Transform, class Tag>
 struct SpecialKey {
   typedef Transform Extract; // here extract is identical with transform, see usage
@@ -142,7 +102,7 @@ struct SpecialKey {
   }
   template <class Equal>
   bool check(const T& t, const Equal& equal, const Extract& extract) const {
-    return equal(value, extract(t));
+    return equal(extract(t), value);
   }
   void make(T& t) const {
     t = raw_value;

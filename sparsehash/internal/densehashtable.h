@@ -1315,7 +1315,7 @@ class dense_hashtable {
     }
     template <class K>
     bool is_deleted(const K& k) const {
-      return DeletedKey::check(k, *this, *this);
+      return DeletedKey::check(k, static_cast<const EqualKey&>(*this), static_cast<const ExtractKey&>(*this));
     }
     void make_deleted(value_type& v) const {
       DeletedKey::make(v);
@@ -1328,7 +1328,7 @@ class dense_hashtable {
     }
     template <class K>
     bool is_empty(const K& k) const {
-      return EmptyKey::check(k, *this, *this);
+      return EmptyKey::check(k, static_cast<const EqualKey&>(*this), static_cast<const ExtractKey&>(*this));
     }
     void construct_empty(pointer v) const {
       EmptyKey::construct(v);
