@@ -318,7 +318,7 @@ class wrapped_dense_hash_map {
   private:
     const Key& get_impl(const Key& key, bool_t<true>) const { return key; }
     const Key& get_impl(const wrapped_type& w, bool_t<true>) const { return w.key(); }
-    template <class U, class = key_comparable<U>>
+    template <class U>
     const U& get_impl(const U& key, bool_t<true>) const { return key; }
     template <class U>
     Key get_impl(U&& arg, bool_t<false>) const { return Key(std::forward<U>(arg)); }
