@@ -168,21 +168,15 @@ class wrapped_dense_hash_set {
     struct EqualFix : public EqualKey {
       using EqualKey::operator();
     private:
-      template <class L>
-      void operator() (const L&, const Value&) const;
-    };
-    struct HashFix : public HashFcn {
-      using HashFcn::operator();
-    private:
-      template <class T>
-      void operator() (const T&) const;
+      template <class L, class R>
+      void operator() (const L&, const R&) const;
     };
     // check, if we can call supplied hash and equalto functors
     // with value of some type
     typedef typename std::decay<K>::type KeyT;
     static constexpr bool value =
         google::is_callable<EqualFix, const KeyT&, const Value&>::value &&
-        google::is_callable<HashFix, const KeyT&>::value;
+        google::is_callable<HashFcn, const KeyT&>::value;
   };
   // types, which we can use in place of key
   // for purposes of lookup

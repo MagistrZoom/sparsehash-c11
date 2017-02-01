@@ -134,21 +134,15 @@ class dense_hash_map {
     struct EqualFix : public EqualKey {
       using EqualKey::operator();
     private:
-      template <class L>
-      void operator()(const L&, const Key&) const;
-    };
-    struct HashFix : public HashFcn {
-      using HashFcn::operator();
-    private:
-      template <class R>
-      void operator()(const R&) const;
+      template <class L, class R>
+      void operator()(const L&, const R&) const;
     };
     // check, if we can call supplied hash and equalto functors
     // with value of some type
     typedef typename std::decay<K>::type KeyT;
     static constexpr bool value =
         is_callable<EqualFix, const KeyT&, const NonconstKey&>::value &&
-        is_callable<HashFix, const KeyT&>::value;
+        is_callable<HashFcn, const KeyT&>::value;
   };
   // types, which we can use in place of key
   // for purposes of lookup
