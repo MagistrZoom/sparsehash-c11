@@ -358,5 +358,24 @@ inline C invoke_cons(const std::tuple<Args...>& tuple) {
     return invoke_cons_impl<C>(tuple, redi::index_sequence_for<Args...>{});
 }
 
+template <class C, class... Args, size_t... Is>
+inline void invoke_placement_cons_impl(void* dst, std::tuple<Args...>&& tuple, redi::index_sequence<Is...>) {
+    new (dst) C(std::forward<Args>(std::get<Is>(tuple))...);
+}
+
+template <class C, class... Args>
+inline void invoke_placement_cons(void* dst, std::tuple<Args...>&& tuple) {
+    invoke_placement_cons_impl<C>(dst, std::move(tuple), redi::index_sequence_for<Args...>{});
+}
+
+template <class C, class... Args>
+inline void invoke_placement_cons(void* dst, const std::tuple<Args...>& tuple) {
+    invoke_placement_cons_impl<C>(dst, tuple, redi::index_sequence_for<Args...>{});
+}
+
+struct NoOp {
+  void operator() ();
+};
+
 }  // namespace sparsehash_internal
 }  // namespace google

@@ -1517,7 +1517,7 @@ TEST(HashtableDeathTest, InsertSizeTypeOverflow) {
 
   sparse_hash_set<int, Hasher, Hasher, Alloc<int, uint8, 10>> shs;
   dense_hash_set<int, Hasher, Hasher, Alloc<int, uint8, 10>> dhs;
-  wrapped_dense_hash_set<int, Hasher, Hasher, AllocT> whs;
+  wrapped_dense_hash_set<int, Hasher, Hasher, sparsehash_internal::NoOp, AllocT> whs;
   dhs.set_empty_key(-1);
 
   // Test we are using the correct allocator
@@ -1543,7 +1543,7 @@ TEST(HashtableDeathTest, InsertMaxSizeOverflow) {
 
   sparse_hash_set<int, Hasher, Hasher, Alloc<int, uint8, 10>> shs;
   dense_hash_set<int, Hasher, Hasher, Alloc<int, uint8, 10>> dhs;
-  wrapped_dense_hash_set<int, Hasher, Hasher, AllocT> whs;
+  wrapped_dense_hash_set<int, Hasher, Hasher, sparsehash_internal::NoOp, AllocT> whs;
   dhs.set_empty_key(-1);
 
   // Test max_size overflow
@@ -1559,7 +1559,7 @@ TEST(HashtableDeathTest, ResizeSizeTypeOverflow) {
   // Test min-buckets overflow, when we want to resize too close to size_type
   sparse_hash_set<int, Hasher, Hasher, Alloc<int, uint8, 10>> shs;
   dense_hash_set<int, Hasher, Hasher, Alloc<int, uint8, 10>> dhs;
-  wrapped_dense_hash_set<int, Hasher, Hasher, AllocT> whs;
+  wrapped_dense_hash_set<int, Hasher, Hasher, sparsehash_internal::NoOp, AllocT> whs;
   dhs.set_empty_key(-1);
 
   EXPECT_THROW(dhs.resize(250), std::length_error);  // 9+250 > 256
@@ -1576,7 +1576,7 @@ TEST(HashtableDeathTest, ResizeDeltaOverflow) {
 
   sparse_hash_set<int, Hasher, Hasher, Alloc<int, uint8, 255>> shs;
   dense_hash_set<int, Hasher, Hasher, Alloc<int, uint8, 255>> dhs;
-  wrapped_dense_hash_set<int, Hasher, Hasher, AllocT> whs;
+  wrapped_dense_hash_set<int, Hasher, Hasher, sparsehash_internal::NoOp, AllocT> whs;
   dhs.set_empty_key(-1);
   for (int i = 0; i < 9; i++) {
     dhs.insert(i);

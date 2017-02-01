@@ -204,13 +204,17 @@ struct wrapped_traits {
   };
 };
 
-template <class X, class Y>
-using trait_or = std::integral_constant<bool, X::value || Y::value>;
-
 } // map_detail namespace
 
+// a special template parameter - KeyConverter, is needed if user wants
+// to directly emplace into container values, from which container's keys
+// cannot be directly constructed; or use fully operator[] with such values;
+// KeyConverter is a functor, which convert a value to a tuple, containing
+// parameters for key constructor; those parameters will be perfectly
+// forwarded to a key constructor.
+
 template <class Key, class Value, class HashFcn = std::hash<Key>,
-          class EqualKey = std::equal_to<Key>,
+          class EqualKey = std::equal_to<Key>, class KeyConverter = google::sparsehash_internal::NoOp,
           template <class...> class Alloc = google::libc_allocator_with_realloc>
 class wrapped_dense_hash_map {
  private:
@@ -219,15 +223,63 @@ class wrapped_dense_hash_map {
   typedef typename wrapped_type::template Equal<EqualKey> equal_key;
   typedef typename wrapped_type::template Hash<HashFcn> hash_key;
   typedef Alloc<wrapped_type> alloc_value;
+  // trait:
+  //    can we use this type for hash calculation and equality comparison (with key value)
+  //    instead of key?
   template <class K>
   struct is_key_substitute {
+    // to enforce matching with overloads, not requiring
+    // a type cast, we have to disable the most generic
+    // overload (make it uncallable)
+    struct EqualFix : public EqualKey {
+      using EqualKey::operator();
+    private:
+      template <class L>
+      void operator() (const L&, const Key&) const;
+    };
+    struct HashFix : public HashFcn {
+      using HashFcn::operator();
+    private:
+      template <class R>
+      void operator() (const R&) const;
+    };
+    // check, if we can call supplied hash and equalto functors
+    // with value of some type
     typedef typename std::decay<K>::type KeyT;
     static constexpr bool value =
-        google::is_callable<EqualKey, const KeyT&, const Key&>::value &&
-        google::is_callable<HashFcn, const KeyT&>::value;
+        google::is_callable<EqualFix, const KeyT&, const Key&>::value &&
+        google::is_callable<HashFix, const KeyT&>::value;
   };
+  // types, which we can use in place of key
+  // for purposes of lookup
   template <class K>
   using key_comparable = typename std::enable_if<is_key_substitute<K>::value>::type;
+  // trait:
+  //    can we construct key's value from
+  template <class K>
+  struct is_key_constructible {
+    // to enforce matching with overloads, not requiring
+    // a type cast, we have to disable the most generic
+    // overload (make it uncallable)
+    struct ConverterFix : public KeyConverter {
+      using KeyConverter::operator();
+    private:
+      template <class R>
+      void operator() (const R&) const;
+    };
+    static constexpr bool simple = std::is_constructible<Key, K&&>::value;
+    static constexpr bool helper = !simple && google::is_callable<ConverterFix, K&&>::value;
+  };
+  // types, which we can use for purposes of lookup and from which
+  // we can construct key's value directly
+  template <class K>
+  using key_comparable_and_constructible = typename std::enable_if<
+        is_key_substitute<K>::value &&
+        is_key_constructible<K>::simple
+    >::type;
+  // types, from which we can construct key's value with a supplied helper
+  template <class K>
+  using helper_constructible = typename std::enable_if<is_key_constructible<K>::helper>::type;
   struct extract_key {
     // simpliest case - we got a value from underlying hashtable
     const Key& operator()(const wrapped_type& w) const {
@@ -241,9 +293,10 @@ class wrapped_dense_hash_map {
     }
 
     template <class U>
-    using is_key = map_detail::trait_or<
+    using is_key = google::trait_or<
         std::is_same<Key, typename std::decay<U>::type>,
-        std::is_same<wrapped_type, typename std::decay<U>::type>>;
+        std::is_same<wrapped_type, typename std::decay<U>::type>,
+        is_key_substitute<U>>;
     template <bool v>
     using bool_t = std::integral_constant<bool, v>;
     template <class U>
@@ -251,7 +304,7 @@ class wrapped_dense_hash_map {
     template <class U>
     using return_type = typename std::conditional<
         is_key<U>::value,
-        const Key&,
+        const typename std::decay<U>::type&,
         Key>::type;
 
     template <class U1, class U2>
@@ -271,10 +324,13 @@ class wrapped_dense_hash_map {
   private:
     const Key& get_impl(const Key& key, bool_t<true>) const { return key; }
     const Key& get_impl(const wrapped_type& w, bool_t<true>) const { return w.key(); }
+    template <class U, class = key_comparable<U>>
+    const U& get_impl(const U& key, bool_t<true>) const { return key; }
     template <class U>
     Key get_impl(U&& arg, bool_t<false>) const { return Key(std::forward<U>(arg)); }
   };
-  struct construct_value {
+  struct construct_value
+    : public KeyConverter {
     // 1st case - we are dealing with a hashtable's value here
     template <typename V, typename = typename std::enable_if<std::is_same<wrapped_type, typename std::decay<V>::type>::value>::type>
     void operator()(void* dst, V&& v) const {
@@ -287,9 +343,15 @@ class wrapped_dense_hash_map {
     }
     template <class K, class... Args>
     auto operator()(void* dst, const K&, Args&& ...args) const
-      -> key_comparable<K>
+      -> key_comparable_and_constructible<K>
     {
       new (dst) wrapped_type(std::forward<Args>(args)...);
+    }
+    template <class K1, class K, class TArg, class = helper_constructible<K>>
+    void operator()(void* dst, K1&&, K&& k, TArg&& t) const {
+      new (dst) wrapped_type(std::piecewise_construct,
+        KeyConverter::operator()(std::forward<K>(k)),
+        std::forward_as_tuple(std::forward<TArg>(t)));
     }
     // 3rd case - we are forwarding r-value reference to a Key and
     // extracting payload constructor's arguments.
@@ -600,9 +662,9 @@ class wrapped_dense_hash_map {
   }
 };
 
-template <class Key, class Val, class HashFcn, class EqualKey, template <class...> class Alloc>
-inline void swap(wrapped_dense_hash_map<Key, Val, HashFcn, EqualKey, Alloc>& hm1,
-                 wrapped_dense_hash_map<Key, Val, HashFcn, EqualKey, Alloc>& hm2) {
+template <class Key, class Val, class HashFcn, class EqualKey, class KeyConverter, template <class...> class Alloc>
+inline void swap(wrapped_dense_hash_map<Key, Val, HashFcn, EqualKey, KeyConverter, Alloc>& hm1,
+                 wrapped_dense_hash_map<Key, Val, HashFcn, EqualKey, KeyConverter, Alloc>& hm2) {
   hm1.swap(hm2);
 }
 

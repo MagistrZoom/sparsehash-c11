@@ -65,4 +65,16 @@ struct is_callable
     static constexpr bool value = decltype(test<F>(0))::value;
 };
 
+// traits logical operations
+template <class... T>
+struct trait_or;
+
+template <>
+struct trait_or<> : public std::false_type
+{};
+
+template <class L, class... R>
+struct trait_or<L, R...> : public std::integral_constant<bool, L::value || trait_or<R...>::value>
+{};
+
 }

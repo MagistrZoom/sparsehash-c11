@@ -109,36 +109,115 @@
 
 namespace google {
 
+// a special template parameter - KeyConverter, is needed if user wants
+// to directly emplace into container values, from which container's keys
+// cannot be directly constructed; KeyConverter is a functor, which
+// convert a value to a tuple, containing parameters for key constructor;
+// those parameters will be perfectly forwarded to a key constructor.
+
 template <class Value, class HashFcn = std::hash<Value>,
           class EqualKey = std::equal_to<Value>,
-          class Alloc = libc_allocator_with_realloc<Value>>
+          class Alloc = libc_allocator_with_realloc<Value>,
+          class KeyConverter = sparsehash_internal::NoOp>
 class dense_hash_set {
  private:
+  // trait:
+  //    can we use this type for hash calculation and equality comparison (with key value)
+  //    instead of key?
   template <class K>
   struct is_key_substitute {
+    // to enforce matching with overloads, not requiring
+    // a type cast, we have to disable the most generic
+    // overload (make it uncallable)
+    struct EqualFix : public EqualKey {
+      using EqualKey::operator();
+    private:
+      template <class L>
+      void operator()(const L&, const Value&) const;
+    };
+    struct HashFix : public HashFcn {
+      using HashFcn::operator();
+    private:
+      template <class T>
+      void operator()(const T&) const;
+    };
+    // check, if we can call supplied hash and equalto functors
+    // with value of some type
     typedef typename std::decay<K>::type KeyT;
     static constexpr bool value =
-        is_callable<EqualKey, const KeyT&, const Value&>::value &&
-        is_callable<HashFcn, const KeyT&>::value;
+        is_callable<EqualFix, const KeyT&, const Value&>::value &&
+        is_callable<HashFix, const KeyT&>::value;
   };
-  template <class K, class T = void>
-  using key_comparable = typename std::enable_if<is_key_substitute<K>::value, T>::type;
+  // types, which we can use in place of key
+  // for purposes of lookup
+  template <class K>
+  using key_comparable = typename std::enable_if<is_key_substitute<K>::value>::type;
+  // types, which we can NOT use in place of key
+  // for purposes of lookup
+  template <class K>
+  using non_key_comparable = typename std::enable_if<!is_key_substitute<K>::value>::type;
+  // trait:
+  //    can we construct container's value from
+  //    a value of this type?
+  template <class V>
+  struct is_key_constructible {
+    // to enforce matching with overloads, not requiring
+    // a type cast, we have to disable the most generic
+    // overload (make it uncallable)
+    struct ConverterFix : public KeyConverter {
+      using KeyConverter::operator();
+    private:
+      template <class T>
+      void operator()(const T&) const;
+    };
+    static constexpr bool simple = std::is_constructible<Value, V&&>::value;
+    static constexpr bool helper = !simple && is_callable<ConverterFix, V&&>::value;
+  };
+  // types, from which we can construct container's value directly
+  template <class V>
+  using simple_constructible = typename std::enable_if<is_key_constructible<V>::simple>::type;
+  // types, from which we can construct container's value with a supplied helper
+  template <class V>
+  using helper_constructible = typename std::enable_if<is_key_constructible<V>::helper>::type;
   // key extraction and value construction are trivial -
   // we are just forwarding arguments to relevant constructors
   // or to a caller
   struct ExtractKey {
+    // cases, when we are dealing with a key value, already constructed
     const Value& operator()(const Value& v) const { return v; }
     const Value& operator()(Value& v) const { return v; }
     Value&& operator()(Value&& v) const { return std::move(v); }
-    template <typename... Args>
-    Value operator()(Args&& ...args) const {
-      return Value(std::forward<Args>(args)...);
+    // case, when we do not need to construct a key value
+    // to compute hash or to compare with a key
+    template <class Arg, class = key_comparable<Arg>>
+    Arg&& operator()(Arg&& arg) const {
+      return std::forward<Arg>(arg);
+    }
+    // cases, when we need to construct a key value
+    template <class Arg, class = non_key_comparable<Arg>>
+    Value operator()(Arg&& arg) const {
+      return Value(std::forward<Arg>(arg));
+    }
+    template <class Arg1, class Arg2, class... Args>
+    Value operator()(Arg1&& arg1, Arg2&& arg2, Args&& ...args) const {
+      return Value(std::forward<Arg1>(arg1), std::forward<Arg2>(arg2), std::forward<Args>(args)...);
     }
   };
-  struct ConstructValue {
-    template <typename V, typename... Args>
-    void operator()(void* dst, V&& v, Args&&...) const {
+  struct ConstructValue
+    : public KeyConverter {
+    // simple construction
+    template <class V, class... Args>
+    auto operator()(void* dst, V&& v, Args&&...) const
+      -> simple_constructible<V>
+    {
       new (dst) Value(std::forward<V>(v));
+    }
+    // invoke constructor and forward arguments from a tuple,
+    // returned by a helper
+    template <class V, class... Args, class = helper_constructible<V>>
+    void operator()(void* dst, V&& v, Args&&...) const {
+      sparsehash_internal::invoke_placement_cons<Value>(dst,
+        KeyConverter::operator()(std::forward<V>(v)));
     }
   };
   struct DeletedKey {
@@ -148,10 +227,8 @@ class dense_hash_set {
     bool check(const Value& v, const EqualKey& equal, const ExtractKey&) const {
       return equal(v, deleted);
     }
-    template <class K>
-    auto check(const K& v, const EqualKey& equal, const ExtractKey&) const
-      -> key_comparable<K, bool>
-    {
+    template <class K, class = key_comparable<K>>
+    bool check(const K& v, const EqualKey& equal, const ExtractKey&) const {
       return equal(v, deleted);
     }
     void make(Value& value) const {
@@ -165,10 +242,8 @@ class dense_hash_set {
     bool check(const Value& v, const EqualKey& equal, const ExtractKey&) const {
       return equal(v, empty);
     }
-    template <class K>
-    auto check(const K& v, const EqualKey& equal, const ExtractKey&) const
-      -> key_comparable<K, bool>
-    {
+    template <class K, class = key_comparable<K>>
+    bool check(const K& v, const EqualKey& equal, const ExtractKey&) const {
       return equal(v, empty);
     }
     void construct(Value* value) const {
@@ -395,10 +470,13 @@ class dense_hash_set {
   }
 };
 
-template <class Val, class HashFcn, class EqualKey, class Alloc>
-inline void swap(dense_hash_set<Val, HashFcn, EqualKey, Alloc>& hs1,
-                 dense_hash_set<Val, HashFcn, EqualKey, Alloc>& hs2) {
+template <class Val, class HashFcn, class EqualKey, class Alloc, class KeyConverter>
+inline void swap(dense_hash_set<Val, HashFcn, EqualKey, Alloc, KeyConverter>& hs1,
+                 dense_hash_set<Val, HashFcn, EqualKey, Alloc, KeyConverter>& hs2) {
   hs1.swap(hs2);
 }
+
+template <class Value, class HashFcn, class EqualKey, class ConstructFcn>
+using dense_hash_set_tune = dense_hash_set<Value, HashFcn, EqualKey, libc_allocator_with_realloc<Value>, ConstructFcn>;
 
 }  // namespace google

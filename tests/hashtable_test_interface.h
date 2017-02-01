@@ -1036,9 +1036,9 @@ template <class Value, class HashFcn = std::hash<Value>,
           template <class...> class Alloc = libc_allocator_with_realloc>
 class HashtableInterface_WrappedDenseHashSet
     : public BaseHashtableInterface<
-          sparsehash::wrapped_dense_hash_set<Value, HashFcn, EqualKey, Alloc>> {
+          sparsehash::wrapped_dense_hash_set<Value, HashFcn, EqualKey, sparsehash_internal::NoOp, Alloc>> {
  private:
-  typedef sparsehash::wrapped_dense_hash_set<Value, HashFcn, EqualKey, Alloc> ht;
+  typedef sparsehash::wrapped_dense_hash_set<Value, HashFcn, EqualKey, sparsehash_internal::NoOp, Alloc> ht;
   typedef BaseHashtableInterface<ht> p;  // parent
 
  public:
@@ -1161,9 +1161,9 @@ template <class Key, class T,
           template <class...> class Alloc = libc_allocator_with_realloc>
 class HashtableInterface_WrappedDenseHashMap
     : public BaseHashtableInterface<
-          sparsehash::wrapped_dense_hash_map<Key, T, HashFcn, EqualKey, Alloc>> {
+          sparsehash::wrapped_dense_hash_map<Key, T, HashFcn, EqualKey, sparsehash_internal::NoOp, Alloc>> {
  private:
-  typedef sparsehash::wrapped_dense_hash_map<Key, T, HashFcn, EqualKey, Alloc> ht;
+  typedef sparsehash::wrapped_dense_hash_map<Key, T, HashFcn, EqualKey, sparsehash_internal::NoOp, Alloc> ht;
   typedef BaseHashtableInterface<ht> p;  // parent
 
  public:
