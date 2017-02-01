@@ -88,8 +88,8 @@
 #include <memory>      // for alloc
 #include <stdexcept>   // for out_of_range
 #include <utility>     // for pair<>
-#include <sparsehash/internal/libc_allocator_with_realloc.h>
-#include <sparsehash/internal/sparsehashtable.h>  // IWYU pragma: export
+#include "internal/libc_allocator_with_realloc.h"
+#include "internal/sparsehashtable.h"  // IWYU pragma: export
 
 namespace google {
 
