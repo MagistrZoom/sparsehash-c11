@@ -213,9 +213,18 @@ class dense_hash_map {
     template <class U>
     using direct_tag = bool_t<is_key<U>::value>;
     template <class U>
+    struct spec_decay {
+        typedef typename std::decay<U>::type UU;
+        typedef typename std::conditional<
+            std::is_pointer<UU>::value,
+            const UU,
+            const UU&
+            >::type type;
+    };
+    template <class U>
     using return_type = typename std::conditional<
         is_key<U>::value,
-        const typename std::decay<U>::type&,
+        typename spec_decay<U>::type,
         Key>::type;
 
     template <class U1, class U2>
