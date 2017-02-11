@@ -77,4 +77,26 @@ template <class L, class... R>
 struct trait_or<L, R...> : public std::integral_constant<bool, L::value || trait_or<R...>::value>
 {};
 
+// pass scalar and small types by value and other types by reference
+template <class T>
+struct decay_to_pass {
+  static constexpr bool is_rreference = std::is_rvalue_reference<T>::value;
+  using Tt = typename std::decay<T>::type;
+  static constexpr bool is_scalar = std::is_scalar<Tt>::value;
+  static constexpr bool is_pointer = std::is_pointer<Tt>::value;
+  static constexpr bool is_small = sizeof(Tt) <= 2 * sizeof(Tt*); // TODO: find rule of thumb supported by facts for this
+  static constexpr bool by_value = is_scalar || is_small;
+  using P = typename std::remove_pointer<Tt>::type;
+  using ConstT = typename std::conditional<is_pointer, const P*, Tt>::type;
+  using R = typename std::conditional<is_rreference, Tt&&, Tt&>::type;
+  using type = typename std::conditional<by_value, Tt, R>::type;
+  using const_type = typename std::conditional<by_value, ConstT, const Tt&>::type;
+};
+
+template <class T>
+using decay_to_pass_t = typename decay_to_pass<T>::type;
+
+template <class T>
+using decay_to_pass_const_t = typename decay_to_pass<T>::const_type;
+
 }
