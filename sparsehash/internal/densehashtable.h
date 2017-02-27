@@ -1276,7 +1276,7 @@ class dense_hashtable {
 
     template <typename... Args>
     auto construct_value(void* dst, Args&& ...args) const
-      -> decltype(ConstructValue::operator()(dst, std::forward<Args>(args)...)) {
+      -> decltype(std::declval<ConstructValue>()(dst, std::forward<Args>(args)...)) {
       return ConstructValue::operator()(dst, std::forward<Args>(args)...);
     }
   };
@@ -1309,7 +1309,7 @@ class dense_hashtable {
     // We want to return the exact same type as ExtractKey: Key or const Key&
     template <typename... Args>
     auto get_key(Args&& ...args) const
-      -> decltype(ExtractKey::operator()(std::forward<Args>(args)...)) {
+      -> decltype(std::declval<ExtractKey>()(std::forward<Args>(args)...)) {
       return ExtractKey::operator()(std::forward<Args>(args)...);
     }
     template <class K1, class K2>
