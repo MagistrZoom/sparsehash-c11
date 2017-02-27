@@ -348,6 +348,8 @@ class wrapped_dense_hash_map {
   local_iterator end(size_type i) { return local_iterator(rep.end(i)); }
   const_local_iterator begin(size_type i) const { return const_local_iterator(rep.begin(i)); }
   const_local_iterator end(size_type i) const { return const_local_iterator(rep.end(i)); }
+  const_local_iterator cbegin(size_type i) const { return const_local_iterator(rep.begin(i)); }
+  const_local_iterator cend(size_type i) const { return const_local_iterator(rep.end(i)); }
 
   // Accessor functions
   allocator_type get_allocator() const { return rep.get_allocator(); }
