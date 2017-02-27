@@ -15,6 +15,43 @@ using sparsehash::wrapped_dense_hash_map;
 
 namespace extkey_tests {
 
+class S
+{
+    int i_;
+public:
+    static int ctor;
+    static int copy_ctor;
+    static int copy_assign;
+    static int move_ctor;
+    static int move_assign;
+
+    static void reset()
+    {
+        ctor = 0;
+        copy_ctor = 0;
+        copy_assign = 0;
+        move_ctor = 0;
+        move_assign = 0;
+    }
+
+    S(): i_(0) { ++ctor; }
+    S(int i): i_(i) { ++ctor; }
+
+    S(const S& s): i_(s.i_) { ++copy_ctor; }
+    S& operator=(const S& s) { i_ = s.i_; ++copy_assign; return *this; }
+
+    S(S&& s): i_(s.i_) { ++move_ctor; }
+    S& operator=(S&& s) { i_ = s.i_; ++move_assign; return *this; }
+
+    int get_data() const { return i_; }
+};
+
+int S::ctor = 0;
+int S::copy_ctor = 0;
+int S::copy_assign = 0;
+int S::move_ctor = 0;
+int S::move_assign = 0;
+
 class A
 {
     std::string str_;
@@ -49,6 +86,7 @@ public:
     A(const std::string& s): str_(s) { ++ctor; ++str_copy_ctor; }
     A(std::string&& s): str_(std::move(s)) { ++ctor; ++str_move_ctor; }
     A(const char* s): str_(s) { ++ctor; ++str_ctor; }
+    A(const S& s): str_(std::to_string(s.get_data())) { ++ctor; ++str_ctor; }
 
     A(const A& a): str_(a.str_) { ++copy_ctor; ++str_copy_ctor; }
     A& operator=(const A& a) { str_ = a.str_; ++copy_assign; ++str_copy_assign; return *this; }
@@ -59,11 +97,11 @@ public:
     const std::string& get_str() const { return str_; }
 
     friend bool operator==(const A& lhs, const A& rhs) { return lhs.str_ == rhs.str_; }
-    friend bool operator!=(const A& lhs, const A& rhs) { return lhs.str_ == rhs.str_; }
+    friend bool operator!=(const A& lhs, const A& rhs) { return lhs.str_ != rhs.str_; }
     friend bool operator==(const A& lhs, const std::string& rhs) { return lhs.str_ == rhs; }
-    friend bool operator!=(const A& lhs, const std::string& rhs) { return lhs.str_ == rhs; }
+    friend bool operator!=(const A& lhs, const std::string& rhs) { return lhs.str_ != rhs; }
     friend bool operator==(const std::string& lhs, const A& rhs) { return lhs == rhs.str_; }
-    friend bool operator!=(const std::string& lhs, const A& rhs) { return lhs == rhs.str_; }
+    friend bool operator!=(const std::string& lhs, const A& rhs) { return lhs != rhs.str_; }
 };
 
 int A::ctor = 0;
@@ -104,6 +142,7 @@ struct HashA
     size_t operator() (const A& a) const { return std::hash<std::string>::operator() (a.get_str()); }
     size_t operator() (const std::string& s) const { return std::hash<std::string>::operator() (s); }
     size_t operator() (const B& b) const { return std::hash<std::string>::operator() (b.get_string()); }
+    size_t operator() (const S& s) const { return std::hash<int>() (s.get_data()); }
 };
 
 struct EqualA
@@ -113,6 +152,96 @@ struct EqualA
     bool operator() (const std::string& lhs, const A& rhs) const { return lhs == rhs; }
     bool operator() (const A& lhs, const B& rhs) const { return lhs == rhs.get_string(); }
     bool operator() (const B& lhs, const A& rhs) const { return lhs.get_string() == rhs; }
+    bool operator() (const S& lhs, const A& rhs) const { return std::to_string(lhs.get_data()) == rhs; }
+    bool operator() (const A& lhs, const S& rhs) const { return lhs == std::to_string(rhs.get_data()); }
+};
+
+class C
+{
+    std::string str_;
+public:
+    static int ctor;
+    static int copy_ctor;
+    static int copy_assign;
+    static int move_ctor;
+    static int move_assign;
+
+    static int str_ctor;
+    static int str_copy_ctor;
+    static int str_copy_assign;
+    static int str_move_ctor;
+    static int str_move_assign;
+
+    static void reset()
+    {
+        ctor = 0;
+        copy_ctor = 0;
+        copy_assign = 0;
+        move_ctor = 0;
+        move_assign = 0;
+        str_ctor = 0;
+        str_copy_ctor = 0;
+        str_copy_assign = 0;
+        str_move_ctor = 0;
+        str_move_assign = 0;
+    }
+
+    C() { ++ctor; ++str_ctor; }
+    C(const std::string& s): str_(s) { ++ctor; ++str_copy_ctor; }
+    C(std::string&& s): str_(std::move(s)) { ++ctor; ++str_move_ctor; }
+    C(const char* s): str_(s) { ++ctor; ++str_ctor; }
+    C(const S& s): str_(std::to_string(s.get_data())) { ++ctor; ++str_ctor; }
+    C(S&& s): str_(std::to_string(s.get_data())) { ++ctor; ++str_ctor; }
+
+    C(const C& a): str_(a.str_) { ++copy_ctor; ++str_copy_ctor; }
+    C& operator=(const C& a) { str_ = a.str_; ++copy_assign; ++str_copy_assign; return *this; }
+
+    C(C&& a): str_(std::move(a.str_)) { ++move_ctor; ++str_move_ctor; }
+    C& operator=(C&& a) { str_ = std::move(a.str_); ++move_assign; ++str_move_assign; return *this; }
+
+    const std::string& get_str() const { return str_; }
+
+    friend bool operator==(const C& lhs, const C& rhs) { return lhs.str_ == rhs.str_; }
+    friend bool operator!=(const C& lhs, const C& rhs) { return lhs.str_ != rhs.str_; }
+    friend bool operator==(const C& lhs, const std::string& rhs) { return lhs.str_ == rhs; }
+    friend bool operator!=(const C& lhs, const std::string& rhs) { return lhs.str_ != rhs; }
+    friend bool operator==(const std::string& lhs, const C& rhs) { return lhs == rhs.str_; }
+    friend bool operator!=(const std::string& lhs, const C& rhs) { return lhs != rhs.str_; }
+    friend bool operator==(const C& lhs, const char* rhs) { return lhs.str_ == rhs; }
+    friend bool operator!=(const C& lhs, const char* rhs) { return lhs.str_ != rhs; }
+    friend bool operator==(const char* lhs, const C& rhs) { return lhs == rhs.str_; }
+    friend bool operator!=(const char* lhs, const C& rhs) { return lhs != rhs.str_; }
+};
+
+int C::ctor = 0;
+int C::copy_ctor = 0;
+int C::copy_assign = 0;
+int C::move_ctor = 0;
+int C::move_assign = 0;
+int C::str_ctor = 0;
+int C::str_copy_ctor = 0;
+int C::str_copy_assign = 0;
+int C::str_move_ctor = 0;
+int C::str_move_assign = 0;
+
+struct HashC
+    : public std::hash<std::string>
+{
+    size_t operator() (const C& a) const { return std::hash<std::string>::operator() (a.get_str()); }
+    size_t operator() (const std::string& s) const { return std::hash<std::string>::operator() (s); }
+    size_t operator() (const char* s) const { return std::hash<std::string>::operator() (std::string{s}); }
+    size_t operator() (const S& s) const { return std::hash<int>() (s.get_data()); }
+};
+
+struct EqualC
+{
+    bool operator() (const C& lhs, const C& rhs) const { return lhs == rhs; }
+    bool operator() (const C& lhs, const std::string& rhs) const { return lhs == rhs; }
+    bool operator() (const std::string& lhs, const C& rhs) const { return lhs == rhs; }
+    bool operator() (const C& lhs, const char* rhs) const { return lhs == rhs; }
+    bool operator() (const char* lhs, const C& rhs) const { return lhs == rhs; }
+    bool operator() (const S& lhs, const C& rhs) const { return std::to_string(lhs.get_data()) == rhs; }
+    bool operator() (const C& lhs, const S& rhs) const { return lhs == std::to_string(rhs.get_data()); }
 };
 
 template <class K, class Container>
@@ -138,6 +267,11 @@ typedef wrapped_dense_hash_set<A, HashA, EqualA> WrappedSetLookup;
 typedef wrapped_dense_hash_map<A, int, HashA, EqualA, BtoA> WrappedMap;
 typedef wrapped_dense_hash_map<A, int, HashA, EqualA> WrappedMapLookup;
 
+typedef dense_hash_set<C, HashC, EqualC> SetC;
+typedef dense_hash_map<C, int, HashC, EqualC> MapC;
+typedef wrapped_dense_hash_set<C, HashC, EqualC> WrappedSetC;
+typedef wrapped_dense_hash_map<C, int, HashC, EqualC> WrappedMapC;
+
 }
 
 using namespace extkey_tests;
@@ -147,9 +281,11 @@ TEST(DenseHashSetLookupExtKeyTest, TypeCheck)
     typedef container_key_accepts<A, SetLookup> AcceptsA;
     typedef container_key_accepts<B, SetLookup> AcceptsB;
     typedef container_key_accepts<std::string, SetLookup> AcceptsString;
+    typedef container_key_accepts<const char *, SetLookup> AcceptsCString;
     EXPECT_TRUE(AcceptsA::value);
     EXPECT_TRUE(AcceptsB::value);
     EXPECT_TRUE(AcceptsString::value);
+    EXPECT_FALSE(AcceptsCString::value);
 }
 
 TEST(DenseHashSetLookupExtKeyTest, Find)
@@ -273,10 +409,14 @@ TEST(DenseHashSetExtKeyTest, TypeCheck)
 {
     typedef container_key_accepts<A, Set> AcceptsA;
     typedef container_key_accepts<B, Set> AcceptsB;
+    typedef container_key_accepts<S, Set> AcceptsS;
     typedef container_key_accepts<std::string, Set> AcceptsString;
+    typedef container_key_accepts<const char *, Set> AcceptsCString;
     EXPECT_TRUE(AcceptsA::value);
     EXPECT_TRUE(AcceptsB::value);
+    EXPECT_TRUE(AcceptsS::value);
     EXPECT_TRUE(AcceptsString::value);
+    EXPECT_FALSE(AcceptsCString::value);
 }
 
 TEST(DenseHashSetExtKeyTest, Find)
@@ -452,6 +592,25 @@ TEST(DenseHashSetExtKeyTest, Emplace)
     ASSERT_EQ(0, A::str_copy_assign) << "emplace of new constructed element";
     ASSERT_EQ(0, A::str_move_ctor) << "emplace of new constructed element";
     ASSERT_EQ(0, A::str_move_assign) << "emplace of new constructed element";
+
+    A::reset();
+    S::reset();
+    set.emplace(101);
+    EXPECT_EQ(1, A::ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, A::copy_ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, A::copy_assign) << "emplace of new constructed element";
+    EXPECT_EQ(1, A::move_ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, A::move_assign) << "emplace of new constructed element";
+    EXPECT_EQ(1, A::str_ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, A::str_copy_ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, A::str_copy_assign) << "emplace of new constructed element";
+    EXPECT_EQ(1, A::str_move_ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, A::str_move_assign) << "emplace of new constructed element";
+    EXPECT_EQ(1, S::ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, S::copy_ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, S::copy_assign) << "emplace of new constructed element";
+    EXPECT_EQ(0, S::move_ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, S::move_assign) << "emplace of new constructed element";
 }
 
 TEST(DenseHashMapLookupExtKeyTest, TypeCheck)
@@ -459,9 +618,11 @@ TEST(DenseHashMapLookupExtKeyTest, TypeCheck)
     typedef container_key_accepts<A, MapLookup> AcceptsA;
     typedef container_key_accepts<B, MapLookup> AcceptsB;
     typedef container_key_accepts<std::string, MapLookup> AcceptsString;
+    typedef container_key_accepts<const char *, MapLookup> AcceptsCString;
     EXPECT_TRUE(AcceptsA::value);
     EXPECT_TRUE(AcceptsB::value);
     EXPECT_TRUE(AcceptsString::value);
+    EXPECT_FALSE(AcceptsCString::value);
 }
 
 TEST(DenseHashMapLookupExtKeyTest, Find)
@@ -586,9 +747,11 @@ TEST(DenseHashMapExtKeyTest, TypeCheck)
     typedef container_key_accepts<A, Map> AcceptsA;
     typedef container_key_accepts<B, Map> AcceptsB;
     typedef container_key_accepts<std::string, Map> AcceptsString;
+    typedef container_key_accepts<const char *, Map> AcceptsCString;
     EXPECT_TRUE(AcceptsA::value);
     EXPECT_TRUE(AcceptsB::value);
     EXPECT_TRUE(AcceptsString::value);
+    EXPECT_FALSE(AcceptsCString::value);
     typedef container_key_constructible<std::string, Map> StringConstructible;
     typedef container_key_transformable<std::string, Map> StringTransformable;
     typedef container_key_constructible<B, Map> BConstructible;
@@ -852,9 +1015,11 @@ TEST(WrappedDenseHashSetExtKeyTest, TypeCheck)
     typedef container_key_accepts<A, WrappedSet> AcceptsA;
     typedef container_key_accepts<B, WrappedSet> AcceptsB;
     typedef container_key_accepts<std::string, WrappedSet> AcceptsString;
+    typedef container_key_accepts<const char *, WrappedSet> AcceptsCString;
     EXPECT_TRUE(AcceptsA::value);
     EXPECT_TRUE(AcceptsB::value);
     EXPECT_TRUE(AcceptsString::value);
+    EXPECT_FALSE(AcceptsCString::value);
 }
 
 TEST(WrappedDenseHashSetExtKeyTest, Find)
@@ -1019,9 +1184,11 @@ TEST(WrappedDenseHashSetLookupExtKeyTest, TypeCheck)
     typedef container_key_accepts<A, WrappedSetLookup> AcceptsA;
     typedef container_key_accepts<B, WrappedSetLookup> AcceptsB;
     typedef container_key_accepts<std::string, WrappedSetLookup> AcceptsString;
+    typedef container_key_accepts<const char *, WrappedSetLookup> AcceptsCString;
     EXPECT_TRUE(AcceptsA::value);
     EXPECT_TRUE(AcceptsB::value);
     EXPECT_TRUE(AcceptsString::value);
+    EXPECT_FALSE(AcceptsCString::value);
 }
 
 TEST(WrappedDenseHashSetLookupExtKeyTest, Find)
@@ -1130,9 +1297,11 @@ TEST(WrappedDenseHashMapExtKeyTest, TypeCheck)
     typedef container_key_accepts<A, WrappedMap> AcceptsA;
     typedef container_key_accepts<B, WrappedMap> AcceptsB;
     typedef container_key_accepts<std::string, WrappedMap> AcceptsString;
+    typedef container_key_accepts<const char *, WrappedMap> AcceptsCString;
     EXPECT_TRUE(AcceptsA::value);
     EXPECT_TRUE(AcceptsB::value);
     EXPECT_TRUE(AcceptsString::value);
+    EXPECT_FALSE(AcceptsCString::value);
 }
 
 TEST(WrappedDenseHashMapExtKeyTest, Find)
@@ -1386,9 +1555,11 @@ TEST(WrappedDenseHashMapLookupExtKeyTest, TypeCheck)
     typedef container_key_accepts<A, WrappedMapLookup> AcceptsA;
     typedef container_key_accepts<B, WrappedMapLookup> AcceptsB;
     typedef container_key_accepts<std::string, WrappedMapLookup> AcceptsString;
+    typedef container_key_accepts<const char *, WrappedMapLookup> AcceptsCString;
     EXPECT_TRUE(AcceptsA::value);
     EXPECT_TRUE(AcceptsB::value);
     EXPECT_TRUE(AcceptsString::value);
+    EXPECT_FALSE(AcceptsCString::value);
 }
 
 TEST(WrappedDenseHashMapLookupExtKeyTest, Find)
@@ -1510,5 +1681,725 @@ TEST(WrappedDenseHashMapLookupExtKeyTest, At)
     ASSERT_EQ(0, A::copy_assign) << "access by acceptable key substitute";
     ASSERT_EQ(0, A::move_ctor) << "access by acceptable key substitute";
     ASSERT_EQ(0, A::move_assign) << "access by acceptable key substitute";
+}
+
+TEST(DenseHashSetCExtKeyTest, TypeCheck)
+{
+    typedef container_key_accepts<C, SetC> AcceptsC;
+    typedef container_key_accepts<std::string, SetC> AcceptsString;
+    typedef container_key_accepts<const char *, SetC> AcceptsCString;
+    typedef container_key_accepts<S, SetC> AcceptsS;
+    typedef container_key_accepts<int, SetC> AcceptsInt;
+    EXPECT_TRUE(AcceptsC::value);
+    EXPECT_TRUE(AcceptsString::value);
+    EXPECT_TRUE(AcceptsCString::value);
+    EXPECT_TRUE(AcceptsS::value);
+    EXPECT_FALSE(AcceptsInt::value);
+}
+
+TEST(DenseHashSetCExtKeyTest, Find)
+{
+    SetC set;
+    set.set_empty_key(C{"<empty>"});
+    set.set_deleted_key(C{"<deleted>"});
+
+    const std::string hello_str("Hello"), world_str("world");
+
+    auto hello_it = set.emplace("Hello").first;
+    auto comma_it = set.emplace(",").first;
+    auto world_it = set.emplace("world").first;
+    set.emplace("!");
+
+    C::reset();
+    auto hello_it_f = set.find(hello_str);
+    EXPECT_TRUE(hello_it == hello_it_f) << "find 'Hello' string";
+    auto world_it_f = set.find(world_str);
+    EXPECT_TRUE(world_it == world_it_f) << "find 'world' string";
+    auto comma_it_f = set.find(std::string{","});
+    EXPECT_TRUE(comma_it == comma_it_f) << "find ',' string";
+    ASSERT_EQ(0, C::ctor) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::move_ctor) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::move_assign) << "find by acceptable key substitute";
+
+    auto it = set.find("!");
+    EXPECT_FALSE(it == set.end());
+    ASSERT_EQ(0, C::ctor) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::move_ctor) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::move_assign) << "find by acceptable key substitute";
+}
+
+TEST(DenseHashSetCExtKeyTest, Count)
+{
+    SetC set;
+    set.set_empty_key(C{"<empty>"});
+    set.set_deleted_key(C{"<deleted>"});
+
+    const std::string hello_str("Hello"), world_str("world");
+
+    set.emplace("Hello");
+    set.emplace(",");
+    set.emplace("world");
+    set.emplace("!");
+
+    C::reset();
+    EXPECT_EQ(1, set.count(hello_str)) << "count 'Hello' string";
+    EXPECT_EQ(1, set.count(world_str)) << "count 'world' string";
+    EXPECT_EQ(0, set.count(std::string{"missing"})) << "count 'missing' string";
+    ASSERT_EQ(0, C::ctor) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::move_ctor) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::move_assign) << "count by acceptable key substitute";
+
+    EXPECT_EQ(1, set.count("!")) << "count '!' string";
+    ASSERT_EQ(0, C::ctor) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::move_ctor) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::move_assign) << "count by acceptable key substitute";
+}
+
+TEST(DenseHashSetCExtKeyTest, EqualRange)
+{
+    SetC set;
+    set.set_empty_key(C{"<empty>"});
+    set.set_deleted_key(C{"<deleted>"});
+
+    const std::string hello_str("Hello"), world_str("world");
+
+    auto hello_it = set.emplace("Hello").first;
+    set.emplace(",");
+    set.emplace("world");
+    set.emplace("!");
+
+    C::reset();
+    auto range = set.equal_range(hello_str);
+    EXPECT_FALSE(range.first == range.second) << "equal_range for 'Hello' string";
+    EXPECT_TRUE(range.first == hello_it) << "equal_range for 'Hello' string";
+    auto empty_range = set.equal_range(std::string{"missing"});
+    EXPECT_TRUE(empty_range.first == empty_range.second) << "equal_range for 'missing' string";
+    EXPECT_TRUE(empty_range.first == set.end()) << "equal_range for 'missing' string";
+    set.equal_range("another missing");
+    ASSERT_EQ(0, C::ctor) << "equal_range by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "equal_range by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "equal_range by acceptable key substitute";
+    ASSERT_EQ(0, C::move_ctor) << "equal_range by acceptable key substitute";
+    ASSERT_EQ(0, C::move_assign) << "equal_range by acceptable key substitute";
+}
+
+TEST(DenseHashSetCExtKeyTest, Erase)
+{
+    SetC set;
+    set.set_empty_key(C{"<empty>"});
+    set.set_deleted_key(C{"<deleted>"});
+
+    const std::string hello_str("Hello"), world_str("world");
+
+    set.emplace("Hello");
+    set.emplace(",");
+    set.emplace("world");
+    set.emplace("!");
+
+    C::reset();
+    EXPECT_EQ(1, set.erase(hello_str)) << "erase for 'Hello' string";
+    EXPECT_EQ(1, set.erase(world_str)) << "erase for 'world' string";
+    EXPECT_EQ(0, set.erase(std::string{"missing"})) << "erase for 'missing' string";
+    EXPECT_EQ(0, set.erase("another missing")) << "erase for 'another missing' string literal";
+    ASSERT_EQ(0, C::ctor) << "erase by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "erase by acceptable key substitute";
+    ASSERT_EQ(2, C::copy_assign) << "erase by acceptable key substitute"; // set deleted on 2 entries
+    ASSERT_EQ(0, C::move_ctor) << "erase by acceptable key substitute";
+    ASSERT_EQ(0, C::move_assign) << "erase by acceptable key substitute";
+}
+
+TEST(DenseHashSetCExtKeyTest, Emplace)
+{
+    SetC set;
+    set.set_empty_key(C{"<empty>"});
+    set.set_deleted_key(C{"<deleted>"});
+
+    set.emplace(std::string{"Hello"});
+    set.emplace(",");
+    set.emplace(C{"world"});
+
+    C::reset();
+    EXPECT_FALSE(set.emplace("Hello").second) << "emplace of existing element";
+    ASSERT_EQ(0, C::ctor) << "emplace of existing element";
+    ASSERT_EQ(0, C::copy_ctor) << "emplace of existing element";
+    ASSERT_EQ(0, C::copy_assign) << "emplace of existing element";
+    ASSERT_EQ(0, C::move_ctor) << "emplace of existing element";
+    ASSERT_EQ(0, C::move_assign) << "emplace of existing element";
+
+    C::reset();
+    set.emplace(std::string{"New one"});
+    ASSERT_EQ(1, C::ctor) << "emplace of new element";
+    ASSERT_EQ(0, C::copy_ctor) << "emplace of new element";
+    ASSERT_EQ(0, C::copy_assign) << "emplace of new element";
+    ASSERT_EQ(0, C::move_ctor) << "emplace of new element";
+    ASSERT_EQ(0, C::move_assign) << "emplace of new element";
+    ASSERT_EQ(0, C::str_ctor) << "emplace of new element";
+    ASSERT_EQ(0, C::str_copy_ctor) << "emplace of new element";
+    ASSERT_EQ(0, C::str_copy_assign) << "emplace of new element";
+    ASSERT_EQ(1, C::str_move_ctor) << "emplace of new element";
+    ASSERT_EQ(0, C::str_move_assign) << "emplace of new element";
+
+    C::reset();
+    set.emplace("Another one");
+    ASSERT_EQ(1, C::ctor) << "emplace of new constructed element";
+    ASSERT_EQ(0, C::copy_ctor) << "emplace of new constructed element";
+    ASSERT_EQ(0, C::copy_assign) << "emplace of new constructed element";
+    ASSERT_EQ(0, C::move_ctor) << "emplace of new constructed element";
+    ASSERT_EQ(0, C::move_assign) << "emplace of new constructed element";
+    ASSERT_EQ(1, C::str_ctor) << "emplace of new constructed element";
+    ASSERT_EQ(0, C::str_copy_ctor) << "emplace of new constructed element";
+    ASSERT_EQ(0, C::str_copy_assign) << "emplace of new constructed element";
+    ASSERT_EQ(0, C::str_move_ctor) << "emplace of new constructed element";
+    ASSERT_EQ(0, C::str_move_assign) << "emplace of new constructed element";
+
+    C::reset();
+    S::reset();
+    set.emplace(101);
+    EXPECT_EQ(1, C::ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, C::copy_ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, C::copy_assign) << "emplace of new constructed element";
+    EXPECT_EQ(1, C::move_ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, C::move_assign) << "emplace of new constructed element";
+    EXPECT_EQ(1, C::str_ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, C::str_copy_ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, C::str_copy_assign) << "emplace of new constructed element";
+    EXPECT_EQ(1, C::str_move_ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, C::str_move_assign) << "emplace of new constructed element";
+    EXPECT_EQ(1, S::ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, S::copy_ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, S::copy_assign) << "emplace of new constructed element";
+    EXPECT_EQ(0, S::move_ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, S::move_assign) << "emplace of new constructed element";
+}
+
+TEST(DenseHashMapCExtKeyTest, TypeCheck)
+{
+    typedef container_key_accepts<C, MapC> AcceptsC;
+    typedef container_key_accepts<std::string, MapC> AcceptsString;
+    typedef container_key_accepts<const char *, MapC> AcceptsCString;
+    EXPECT_TRUE(AcceptsC::value);
+    EXPECT_TRUE(AcceptsString::value);
+    EXPECT_TRUE(AcceptsCString::value);
+}
+
+TEST(DenseHashMapCExtKeyTest, Find)
+{
+    MapC map;
+    map.set_empty_key(C{"<empty>"});
+    map.set_deleted_key(C{"<deleted>"});
+
+    const std::string hello_str("Hello"), world_str("world");
+
+    auto hello_it = map.emplace("Hello", 0).first;
+    auto comma_it = map.emplace(",", 1).first;
+    auto world_it = map.emplace("world", 2).first;
+    map.emplace("!", 3);
+    map.emplace(S{33}, 4);
+
+    C::reset();
+    auto hello_it_f = map.find(hello_str);
+    EXPECT_TRUE(hello_it == hello_it_f) << "find 'Hello' string";
+    auto world_it_f = map.find(world_str);
+    EXPECT_TRUE(world_it == world_it_f) << "find 'world' string";
+    auto comma_it_f = map.find(std::string{","});
+    EXPECT_TRUE(comma_it == comma_it_f) << "find ',' string";
+    map.find("world");
+    ASSERT_EQ(0, C::ctor) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::move_ctor) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::move_assign) << "find by acceptable key substitute";
+}
+
+TEST(DenseHashMapCExtKeyTest, Count)
+{
+    MapC map;
+    map.set_empty_key(C{"<empty>"});
+    map.set_deleted_key(C{"<deleted>"});
+
+    const std::string hello_str("Hello"), world_str("world");
+
+    map.emplace("Hello", 0);
+    map.emplace(",", 1);
+    map.emplace("world", 2);
+    map.emplace("!", 3);
+    map.emplace(S{33}, 4);
+
+    C::reset();
+    EXPECT_EQ(1, map.count(hello_str)) << "count 'Hello' string";
+    EXPECT_EQ(1, map.count(world_str)) << "count 'world' string";
+    EXPECT_EQ(0, map.count(std::string{"missing"})) << "count 'missing' string";
+    EXPECT_EQ(0, map.count("another missing")) << "count 'another missing' string literal";
+    ASSERT_EQ(0, C::ctor) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::move_ctor) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::move_assign) << "count by acceptable key substitute";
+}
+
+TEST(DenseHashMapCExtKeyTest, EqualRange)
+{
+    MapC map;
+    map.set_empty_key(C{"<empty>"});
+    map.set_deleted_key(C{"<deleted>"});
+
+    const std::string hello_str("Hello"), world_str("world");
+
+    auto hello_it = map.emplace("Hello", 0).first;
+    map.emplace(",", 1);
+    map.emplace("world", 2);
+    map.emplace("!", 3);
+
+    C::reset();
+    auto range = map.equal_range(hello_str);
+    EXPECT_FALSE(range.first == range.second) << "equal_range for 'Hello' string";
+    EXPECT_TRUE(range.first == hello_it) << "equal_range for 'Hello' string";
+    auto empty_range = map.equal_range(std::string{"missing"});
+    EXPECT_TRUE(empty_range.first == empty_range.second) << "equal_range for 'missing' string";
+    EXPECT_TRUE(empty_range.first == map.end()) << "equal_range for 'missing' string";
+    map.equal_range("world");
+    ASSERT_EQ(0, C::ctor) << "equal_range by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "equal_range by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "equal_range by acceptable key substitute";
+    ASSERT_EQ(0, C::move_ctor) << "equal_range by acceptable key substitute";
+    ASSERT_EQ(0, C::move_assign) << "equal_range by acceptable key substitute";
+}
+
+TEST(DenseHashMapCExtKeyTest, Erase)
+{
+    MapC map;
+    map.set_empty_key(C{"<empty>"});
+    map.set_deleted_key(C{"<deleted>"});
+
+    const std::string hello_str("Hello"), world_str("world");
+
+    map.emplace("Hello", 0);
+    map.emplace(",", 1);
+    map.emplace("world", 2);
+    map.emplace("!", 3);
+
+    C::reset();
+    EXPECT_EQ(1, map.erase(hello_str)) << "erase for 'Hello' string";
+    EXPECT_EQ(1, map.erase("world")) << "erase for 'world' string literal";
+    EXPECT_EQ(0, map.erase(std::string{"missing"})) << "erase for 'missing' string";
+    ASSERT_EQ(0, C::ctor) << "erase by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "erase by acceptable key substitute";
+    ASSERT_EQ(2, C::copy_assign) << "erase by acceptable key substitute"; // set deleted on 2 entries
+    ASSERT_EQ(0, C::move_ctor) << "erase by acceptable key substitute";
+    ASSERT_EQ(0, C::move_assign) << "erase by acceptable key substitute";
+}
+
+TEST(DenseHashMapCExtKeyTest, Emplace)
+{
+    MapC map;
+    map.set_empty_key(C{"<empty>"});
+    map.set_deleted_key(C{"<deleted>"});
+
+    C::reset();
+    map.emplace(std::string{","}, 0);
+    ASSERT_EQ(1, C::ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::move_ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::move_assign) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::str_ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::str_copy_ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::str_copy_assign) << "emplace of direct key substitute";
+    ASSERT_EQ(1, C::str_move_ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::str_move_assign) << "emplace of direct key substitute";
+
+    C::reset();
+    map.emplace("Hello", 1);
+    ASSERT_EQ(1, C::ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::move_ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::move_assign) << "emplace of direct key substitute";
+    ASSERT_EQ(1, C::str_ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::str_copy_ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::str_copy_assign) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::str_move_ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::str_move_assign) << "emplace of direct key substitute";
+
+    C::reset();
+    EXPECT_FALSE(map.emplace(std::string{","}, 2).second) << "emplace of existing direct key substitute";
+    ASSERT_EQ(0, C::ctor) << "emplace of existing direct key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "emplace of existing direct key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "emplace of existing direct key substitute";
+    ASSERT_EQ(0, C::move_ctor) << "emplace of existing direct key substitute";
+    ASSERT_EQ(0, C::move_assign) << "emplace of existing direct key substitute";
+    ASSERT_EQ(0, C::str_ctor) << "emplace of existing direct key substitute";
+    ASSERT_EQ(0, C::str_copy_ctor) << "emplace of existing direct key substitute";
+    ASSERT_EQ(0, C::str_copy_assign) << "emplace of existing direct key substitute";
+    ASSERT_EQ(0, C::str_move_ctor) << "emplace of existing direct key substitute";
+    ASSERT_EQ(0, C::str_move_assign) << "emplace of existing direct key substitute";
+
+    C::reset();
+    S::reset();
+    map.emplace(101, 3);
+    ASSERT_EQ(1, C::ctor) << "emplace of a value, convertible to a key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "emplace of a value, convertible to a key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "emplace of a value, convertible to a key substitute";
+    ASSERT_EQ(1, C::move_ctor) << "emplace of a value, convertible to a key substitute";
+    ASSERT_EQ(0, C::move_assign) << "emplace of a value, convertible to a key substitute";
+    ASSERT_EQ(1, S::ctor) << "emplace of a value, convertible to a key substitute";
+    ASSERT_EQ(0, S::copy_ctor) << "emplace of a value, convertible to a key substitute";
+    ASSERT_EQ(0, S::copy_assign) << "emplace of a value, convertible to a key substitute";
+    ASSERT_EQ(0, S::move_ctor) << "emplace of a value, convertible to a key substitute";
+    ASSERT_EQ(0, S::move_assign) << "emplace of a value, convertible to a key substitute";
+}
+
+TEST(WrappedDenseHashWrappedSetCExtKeyTest, TypeCheck)
+{
+    typedef container_key_accepts<C, WrappedSetC> AcceptsC;
+    typedef container_key_accepts<std::string, WrappedSetC> AcceptsString;
+    typedef container_key_accepts<const char *, WrappedSetC> AcceptsCString;
+    typedef container_key_accepts<S, WrappedSetC> AcceptsS;
+    typedef container_key_accepts<int, WrappedSetC> AcceptsInt;
+    EXPECT_TRUE(AcceptsC::value);
+    EXPECT_TRUE(AcceptsString::value);
+    EXPECT_TRUE(AcceptsCString::value);
+    EXPECT_TRUE(AcceptsS::value);
+    EXPECT_FALSE(AcceptsInt::value);
+}
+
+TEST(WrappedDenseHashWrappedSetCExtKeyTest, Find)
+{
+    WrappedSetC set;
+    const std::string hello_str("Hello"), world_str("world");
+
+    auto hello_it = set.emplace("Hello").first;
+    auto comma_it = set.emplace(",").first;
+    auto world_it = set.emplace("world").first;
+    set.emplace("!");
+
+    C::reset();
+    auto hello_it_f = set.find(hello_str);
+    EXPECT_TRUE(hello_it == hello_it_f) << "find 'Hello' string";
+    auto world_it_f = set.find(world_str);
+    EXPECT_TRUE(world_it == world_it_f) << "find 'world' string";
+    auto comma_it_f = set.find(std::string{","});
+    EXPECT_TRUE(comma_it == comma_it_f) << "find ',' string";
+    ASSERT_EQ(0, C::ctor) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::move_ctor) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::move_assign) << "find by acceptable key substitute";
+
+    auto it = set.find("!");
+    EXPECT_FALSE(it == set.end());
+    ASSERT_EQ(0, C::ctor) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::move_ctor) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::move_assign) << "find by acceptable key substitute";
+}
+
+TEST(WrappedDenseHashWrappedSetCExtKeyTest, Count)
+{
+    WrappedSetC set;
+    const std::string hello_str("Hello"), world_str("world");
+
+    set.emplace("Hello");
+    set.emplace(",");
+    set.emplace("world");
+    set.emplace("!");
+
+    C::reset();
+    EXPECT_EQ(1, set.count(hello_str)) << "count 'Hello' string";
+    EXPECT_EQ(1, set.count(world_str)) << "count 'world' string";
+    EXPECT_EQ(0, set.count(std::string{"missing"})) << "count 'missing' string";
+    ASSERT_EQ(0, C::ctor) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::move_ctor) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::move_assign) << "count by acceptable key substitute";
+
+    EXPECT_EQ(1, set.count("!")) << "count '!' string";
+    ASSERT_EQ(0, C::ctor) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::move_ctor) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::move_assign) << "count by acceptable key substitute";
+}
+
+TEST(WrappedDenseHashWrappedSetCExtKeyTest, EqualRange)
+{
+    WrappedSetC set;
+    const std::string hello_str("Hello"), world_str("world");
+
+    auto hello_it = set.emplace("Hello").first;
+    set.emplace(",");
+    set.emplace("world");
+    set.emplace("!");
+
+    C::reset();
+    auto range = set.equal_range(hello_str);
+    EXPECT_FALSE(range.first == range.second) << "equal_range for 'Hello' string";
+    EXPECT_TRUE(range.first == hello_it) << "equal_range for 'Hello' string";
+    auto empty_range = set.equal_range(std::string{"missing"});
+    EXPECT_TRUE(empty_range.first == empty_range.second) << "equal_range for 'missing' string";
+    EXPECT_TRUE(empty_range.first == set.end()) << "equal_range for 'missing' string";
+    set.equal_range("another missing");
+    ASSERT_EQ(0, C::ctor) << "equal_range by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "equal_range by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "equal_range by acceptable key substitute";
+    ASSERT_EQ(0, C::move_ctor) << "equal_range by acceptable key substitute";
+    ASSERT_EQ(0, C::move_assign) << "equal_range by acceptable key substitute";
+}
+
+TEST(WrappedDenseHashWrappedSetCExtKeyTest, Erase)
+{
+    WrappedSetC set;
+    const std::string hello_str("Hello"), world_str("world");
+
+    set.emplace("Hello");
+    set.emplace(",");
+    set.emplace("world");
+    set.emplace("!");
+
+    C::reset();
+    EXPECT_EQ(1, set.erase(hello_str)) << "erase for 'Hello' string";
+    EXPECT_EQ(1, set.erase(world_str)) << "erase for 'world' string";
+    EXPECT_EQ(0, set.erase(std::string{"missing"})) << "erase for 'missing' string";
+    EXPECT_EQ(0, set.erase("another missing")) << "erase for 'another missing' string literal";
+    ASSERT_EQ(0, C::ctor) << "erase by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "erase by acceptable key substitute";
+    ASSERT_EQ(2, C::copy_assign) << "erase by acceptable key substitute"; // set deleted on 2 entries
+    ASSERT_EQ(0, C::move_ctor) << "erase by acceptable key substitute";
+    ASSERT_EQ(0, C::move_assign) << "erase by acceptable key substitute";
+}
+
+TEST(WrappedDenseHashWrappedSetCExtKeyTest, Emplace)
+{
+    WrappedSetC set;
+
+    set.emplace(std::string{"Hello"});
+    set.emplace(",");
+    set.emplace(C{"world"});
+
+    C::reset();
+    EXPECT_FALSE(set.emplace("Hello").second) << "emplace of existing element";
+    ASSERT_EQ(0, C::ctor) << "emplace of existing element";
+    ASSERT_EQ(0, C::copy_ctor) << "emplace of existing element";
+    ASSERT_EQ(0, C::copy_assign) << "emplace of existing element";
+    ASSERT_EQ(0, C::move_ctor) << "emplace of existing element";
+    ASSERT_EQ(0, C::move_assign) << "emplace of existing element";
+
+    C::reset();
+    set.emplace(std::string{"New one"});
+    ASSERT_EQ(1, C::ctor) << "emplace of new element";
+    ASSERT_EQ(0, C::copy_ctor) << "emplace of new element";
+    ASSERT_EQ(0, C::copy_assign) << "emplace of new element";
+    ASSERT_EQ(0, C::move_ctor) << "emplace of new element";
+    ASSERT_EQ(0, C::move_assign) << "emplace of new element";
+    ASSERT_EQ(0, C::str_ctor) << "emplace of new element";
+    ASSERT_EQ(0, C::str_copy_ctor) << "emplace of new element";
+    ASSERT_EQ(0, C::str_copy_assign) << "emplace of new element";
+    ASSERT_EQ(1, C::str_move_ctor) << "emplace of new element";
+    ASSERT_EQ(0, C::str_move_assign) << "emplace of new element";
+
+    C::reset();
+    set.emplace("Another one");
+    ASSERT_EQ(1, C::ctor) << "emplace of new constructed element";
+    ASSERT_EQ(0, C::copy_ctor) << "emplace of new constructed element";
+    ASSERT_EQ(0, C::copy_assign) << "emplace of new constructed element";
+    ASSERT_EQ(0, C::move_ctor) << "emplace of new constructed element";
+    ASSERT_EQ(0, C::move_assign) << "emplace of new constructed element";
+    ASSERT_EQ(1, C::str_ctor) << "emplace of new constructed element";
+    ASSERT_EQ(0, C::str_copy_ctor) << "emplace of new constructed element";
+    ASSERT_EQ(0, C::str_copy_assign) << "emplace of new constructed element";
+    ASSERT_EQ(0, C::str_move_ctor) << "emplace of new constructed element";
+    ASSERT_EQ(0, C::str_move_assign) << "emplace of new constructed element";
+
+    C::reset();
+    S::reset();
+    set.emplace(101);
+    EXPECT_EQ(1, C::ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, C::copy_ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, C::copy_assign) << "emplace of new constructed element";
+    EXPECT_EQ(1, C::move_ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, C::move_assign) << "emplace of new constructed element";
+    EXPECT_EQ(1, C::str_ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, C::str_copy_ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, C::str_copy_assign) << "emplace of new constructed element";
+    EXPECT_EQ(1, C::str_move_ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, C::str_move_assign) << "emplace of new constructed element";
+    EXPECT_EQ(1, S::ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, S::copy_ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, S::copy_assign) << "emplace of new constructed element";
+    EXPECT_EQ(0, S::move_ctor) << "emplace of new constructed element";
+    EXPECT_EQ(0, S::move_assign) << "emplace of new constructed element";
+}
+
+TEST(WrappedDenseHashWrappedMapCExtKeyTest, TypeCheck)
+{
+    typedef container_key_accepts<C, WrappedMapC> AcceptsC;
+    typedef container_key_accepts<std::string, WrappedMapC> AcceptsString;
+    typedef container_key_accepts<const char *, WrappedMapC> AcceptsCString;
+    EXPECT_TRUE(AcceptsC::value);
+    EXPECT_TRUE(AcceptsString::value);
+    EXPECT_TRUE(AcceptsCString::value);
+}
+
+TEST(WrappedDenseHashWrappedMapCExtKeyTest, Find)
+{
+    WrappedMapC map;
+    const std::string hello_str("Hello"), world_str("world");
+
+    auto hello_it = map.emplace("Hello", 0).first;
+    auto comma_it = map.emplace(",", 1).first;
+    auto world_it = map.emplace("world", 2).first;
+    map.emplace("!", 3);
+    map.emplace(S{33}, 4);
+
+    C::reset();
+    auto hello_it_f = map.find(hello_str);
+    EXPECT_TRUE(hello_it == hello_it_f) << "find 'Hello' string";
+    auto world_it_f = map.find(world_str);
+    EXPECT_TRUE(world_it == world_it_f) << "find 'world' string";
+    auto comma_it_f = map.find(std::string{","});
+    EXPECT_TRUE(comma_it == comma_it_f) << "find ',' string";
+    map.find("world");
+    ASSERT_EQ(0, C::ctor) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::move_ctor) << "find by acceptable key substitute";
+    ASSERT_EQ(0, C::move_assign) << "find by acceptable key substitute";
+}
+
+TEST(WrappedDenseHashWrappedMapCExtKeyTest, Count)
+{
+    WrappedMapC map;
+    const std::string hello_str("Hello"), world_str("world");
+
+    map.emplace("Hello", 0);
+    map.emplace(",", 1);
+    map.emplace("world", 2);
+    map.emplace("!", 3);
+    map.emplace(S{33}, 4);
+
+    C::reset();
+    EXPECT_EQ(1, map.count(hello_str)) << "count 'Hello' string";
+    EXPECT_EQ(1, map.count(world_str)) << "count 'world' string";
+    EXPECT_EQ(0, map.count(std::string{"missing"})) << "count 'missing' string";
+    EXPECT_EQ(0, map.count("another missing")) << "count 'another missing' string literal";
+    ASSERT_EQ(0, C::ctor) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::move_ctor) << "count by acceptable key substitute";
+    ASSERT_EQ(0, C::move_assign) << "count by acceptable key substitute";
+}
+
+TEST(WrappedDenseHashWrappedMapCExtKeyTest, EqualRange)
+{
+    WrappedMapC map;
+    const std::string hello_str("Hello"), world_str("world");
+
+    auto hello_it = map.emplace("Hello", 0).first;
+    map.emplace(",", 1);
+    map.emplace("world", 2);
+    map.emplace("!", 3);
+
+    C::reset();
+    auto range = map.equal_range(hello_str);
+    EXPECT_FALSE(range.first == range.second) << "equal_range for 'Hello' string";
+    EXPECT_TRUE(range.first == hello_it) << "equal_range for 'Hello' string";
+    auto empty_range = map.equal_range(std::string{"missing"});
+    EXPECT_TRUE(empty_range.first == empty_range.second) << "equal_range for 'missing' string";
+    EXPECT_TRUE(empty_range.first == map.end()) << "equal_range for 'missing' string";
+    map.equal_range("world");
+    ASSERT_EQ(0, C::ctor) << "equal_range by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "equal_range by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "equal_range by acceptable key substitute";
+    ASSERT_EQ(0, C::move_ctor) << "equal_range by acceptable key substitute";
+    ASSERT_EQ(0, C::move_assign) << "equal_range by acceptable key substitute";
+}
+
+TEST(WrappedDenseHashWrappedMapCExtKeyTest, Erase)
+{
+    WrappedMapC map;
+    const std::string hello_str("Hello"), world_str("world");
+
+    map.emplace("Hello", 0);
+    map.emplace(",", 1);
+    map.emplace("world", 2);
+    map.emplace("!", 3);
+
+    C::reset();
+    EXPECT_EQ(1, map.erase(hello_str)) << "erase for 'Hello' string";
+    EXPECT_EQ(1, map.erase("world")) << "erase for 'world' string literal";
+    EXPECT_EQ(0, map.erase(std::string{"missing"})) << "erase for 'missing' string";
+    ASSERT_EQ(2, C::ctor) << "erase by acceptable key substitute"; // set deleted on 2 entries
+    ASSERT_EQ(0, C::copy_ctor) << "erase by acceptable key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "erase by acceptable key substitute";
+    ASSERT_EQ(0, C::move_ctor) << "erase by acceptable key substitute";
+    ASSERT_EQ(2, C::move_assign) << "erase by acceptable key substitute"; // set deleted on 2 entries
+}
+
+TEST(WrappedDenseHashWrappedMapCExtKeyTest, Emplace)
+{
+    WrappedMapC map;
+
+    C::reset();
+    map.emplace(std::string{","}, 0);
+    ASSERT_EQ(1, C::ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::move_ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::move_assign) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::str_ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::str_copy_ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::str_copy_assign) << "emplace of direct key substitute";
+    ASSERT_EQ(1, C::str_move_ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::str_move_assign) << "emplace of direct key substitute";
+
+    C::reset();
+    map.emplace("Hello", 1);
+    ASSERT_EQ(1, C::ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::move_ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::move_assign) << "emplace of direct key substitute";
+    ASSERT_EQ(1, C::str_ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::str_copy_ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::str_copy_assign) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::str_move_ctor) << "emplace of direct key substitute";
+    ASSERT_EQ(0, C::str_move_assign) << "emplace of direct key substitute";
+
+    C::reset();
+    EXPECT_FALSE(map.emplace(std::string{","}, 2).second) << "emplace of existing direct key substitute";
+    ASSERT_EQ(0, C::ctor) << "emplace of existing direct key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "emplace of existing direct key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "emplace of existing direct key substitute";
+    ASSERT_EQ(0, C::move_ctor) << "emplace of existing direct key substitute";
+    ASSERT_EQ(0, C::move_assign) << "emplace of existing direct key substitute";
+    ASSERT_EQ(0, C::str_ctor) << "emplace of existing direct key substitute";
+    ASSERT_EQ(0, C::str_copy_ctor) << "emplace of existing direct key substitute";
+    ASSERT_EQ(0, C::str_copy_assign) << "emplace of existing direct key substitute";
+    ASSERT_EQ(0, C::str_move_ctor) << "emplace of existing direct key substitute";
+    ASSERT_EQ(0, C::str_move_assign) << "emplace of existing direct key substitute";
+
+    C::reset();
+    S::reset();
+    map.emplace(101, 3);
+    ASSERT_EQ(1, C::ctor) << "emplace of a value, convertible to a key substitute";
+    ASSERT_EQ(0, C::copy_ctor) << "emplace of a value, convertible to a key substitute";
+    ASSERT_EQ(0, C::copy_assign) << "emplace of a value, convertible to a key substitute";
+    ASSERT_EQ(1, C::move_ctor) << "emplace of a value, convertible to a key substitute";
+    ASSERT_EQ(0, C::move_assign) << "emplace of a value, convertible to a key substitute";
+    ASSERT_EQ(1, S::ctor) << "emplace of a value, convertible to a key substitute";
+    ASSERT_EQ(0, S::copy_ctor) << "emplace of a value, convertible to a key substitute";
+    ASSERT_EQ(0, S::copy_assign) << "emplace of a value, convertible to a key substitute";
+    ASSERT_EQ(0, S::move_ctor) << "emplace of a value, convertible to a key substitute";
+    ASSERT_EQ(0, S::move_assign) << "emplace of a value, convertible to a key substitute";
 }
 

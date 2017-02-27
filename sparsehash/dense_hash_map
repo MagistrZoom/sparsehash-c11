@@ -139,10 +139,10 @@ class dense_hash_map {
     };
     // check, if we can call supplied hash and equalto functors
     // with value of some type
-    typedef typename std::decay<K>::type KeyT;
+    typedef decay_to_pass_const_t<K> KeyT;
     static constexpr bool value =
-        is_callable<EqualFix, const KeyT&, const NonconstKey&>::value &&
-        is_callable<HashFcn, const KeyT&>::value;
+        is_callable<EqualFix, KeyT, const NonconstKey&>::value &&
+        is_callable<HashFcn, KeyT>::value;
   };
   // types, which we can use in place of key
   // for purposes of lookup
@@ -218,7 +218,7 @@ class dense_hash_map {
         typedef typename std::decay<U>::type UU;
         typedef typename std::conditional<
             std::is_pointer<UU>::value,
-            const UU,
+            UU,
             const UU&
             >::type type;
     };

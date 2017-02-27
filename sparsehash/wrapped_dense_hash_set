@@ -173,10 +173,10 @@ class wrapped_dense_hash_set {
     };
     // check, if we can call supplied hash and equalto functors
     // with value of some type
-    typedef typename std::decay<K>::type KeyT;
+    typedef google::decay_to_pass_const_t<K> KeyT;
     static constexpr bool value =
-        google::is_callable<EqualFix, const KeyT&, const Value&>::value &&
-        google::is_callable<HashFcn, const KeyT&>::value;
+        google::is_callable<EqualFix, KeyT, const Value&>::value &&
+        google::is_callable<HashFcn, KeyT>::value;
   };
   // types, which we can use in place of key
   // for purposes of lookup

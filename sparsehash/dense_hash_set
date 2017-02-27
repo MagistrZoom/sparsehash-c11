@@ -137,10 +137,12 @@ class dense_hash_set {
     };
     // check, if we can call supplied hash and equalto functors
     // with value of some type
-    typedef typename std::decay<K>::type KeyT;
+    typedef decay_to_pass_const_t<K> KeyT;
     static constexpr bool value =
-        is_callable<EqualFix, const KeyT&, const Value&>::value &&
-        is_callable<HashFcn, const KeyT&>::value;
+        is_callable<EqualFix, KeyT, const Value&>::value &&
+        is_callable<HashFcn, KeyT>::value;
+    static constexpr bool equal_good = is_callable<EqualFix, KeyT, const Value&>::value;
+    static constexpr bool hash_good = is_callable<HashFcn, KeyT>::value;
   };
   // types, which we can use in place of key
   // for purposes of lookup
