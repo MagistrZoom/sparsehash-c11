@@ -129,13 +129,16 @@ struct wrapped_traits {
   typedef const value_type* const_pointer;
   typedef value_type& reference;
   typedef const value_type& const_reference;
+  typedef wrapped_traits<Key, Value, UnderlyingIterator, UnderlyingConstIterator> traits;
   class wrapped_iterator
     : public UnderlyingIterator {
    public:
-    typedef value_type* pointer;
-    typedef const value_type* const_pointer;
-    typedef value_type& reference;
-    typedef const value_type& const_reference;
+    typedef traits::value_type value_type;
+    typedef traits::pointer pointer;
+    typedef traits::const_pointer const_pointer;
+    typedef traits::reference reference;
+    typedef traits::const_reference const_reference;
+
     wrapped_iterator() = default;
     explicit wrapped_iterator(const UnderlyingIterator& it): UnderlyingIterator(it) {}
     explicit wrapped_iterator(UnderlyingIterator&& it): UnderlyingIterator(std::move(it)) {}
@@ -159,10 +162,12 @@ struct wrapped_traits {
   class wrapped_const_iterator
     : public UnderlyingConstIterator {
    public:
-    typedef const value_type* pointer;
-    typedef const value_type* const_pointer;
-    typedef const value_type& reference;
-    typedef const value_type& const_reference;
+    typedef traits::value_type value_type;
+    typedef traits::const_pointer pointer;
+    typedef traits::const_pointer const_pointer;
+    typedef traits::const_reference reference;
+    typedef traits::const_reference const_reference;
+
     wrapped_const_iterator() = default;
     wrapped_const_iterator(const wrapped_iterator& it): UnderlyingConstIterator(it) {}
     explicit wrapped_const_iterator(const UnderlyingConstIterator& it): UnderlyingConstIterator(it) {}
