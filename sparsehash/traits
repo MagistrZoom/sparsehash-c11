@@ -52,4 +52,15 @@ struct is_relocatable<std::pair<T, U>>
 
 template <class T>
 struct is_relocatable<const T> : is_relocatable<T> {};
+
+template <bool copyable>
+struct copy_characteristics {};
+
+template <>
+struct copy_characteristics<false> {
+  copy_characteristics() = default;
+  copy_characteristics(const copy_characteristics&) = delete;
+  copy_characteristics(copy_characteristics&&) = default;
+};
+
 }
