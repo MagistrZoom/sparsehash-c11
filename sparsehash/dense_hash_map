@@ -120,7 +120,8 @@ template <class Key, class T, class HashFcn = std::hash<Key>,
           class EqualKey = std::equal_to<Key>,
           class Alloc = libc_allocator_with_realloc<std::pair<const Key, T>>,
           class KeyConverter = sparsehash_internal::NoOp>
-class dense_hash_map {
+class dense_hash_map
+  : public copy_characteristics<std::is_copy_constructible<T>::value> {
  private:
   typedef std::pair<const Key, T> ValueT;
   typedef typename std::remove_const<Key>::type NonconstKey;

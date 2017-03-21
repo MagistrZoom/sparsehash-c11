@@ -149,13 +149,16 @@ struct wrapped_traits {
   typedef const value_type* const_pointer;
   typedef value_type& reference;
   typedef const value_type& const_reference;
+  typedef wrapped_traits<Key, Value, UnderlyingIterator, UnderlyingConstIterator> traits;
   class wrapped_iterator
     : public UnderlyingIterator {
    public:
-    typedef value_type* pointer;
-    typedef const value_type* const_pointer;
-    typedef value_type& reference;
-    typedef const value_type& const_reference;
+    typedef typename traits::value_type value_type;
+    typedef typename traits::pointer pointer;
+    typedef typename traits::const_pointer const_pointer;
+    typedef typename traits::reference reference;
+    typedef typename traits::const_reference const_reference;
+
     wrapped_iterator() = default;
     explicit wrapped_iterator(const UnderlyingIterator& it): UnderlyingIterator(it) {}
     explicit wrapped_iterator(UnderlyingIterator&& it): UnderlyingIterator(std::move(it)) {}
@@ -179,10 +182,12 @@ struct wrapped_traits {
   class wrapped_const_iterator
     : public UnderlyingConstIterator {
    public:
-    typedef const value_type* pointer;
-    typedef const value_type* const_pointer;
-    typedef const value_type& reference;
-    typedef const value_type& const_reference;
+    typedef typename traits::value_type value_type;
+    typedef typename traits::const_pointer pointer;
+    typedef typename traits::const_pointer const_pointer;
+    typedef typename traits::const_reference reference;
+    typedef typename traits::const_reference const_reference;
+
     wrapped_const_iterator() = default;
     wrapped_const_iterator(const wrapped_iterator& it): UnderlyingConstIterator(it) {}
     explicit wrapped_const_iterator(const UnderlyingConstIterator& it): UnderlyingConstIterator(it) {}
@@ -216,7 +221,8 @@ struct wrapped_traits {
 template <class Key, class Value, class HashFcn = std::hash<Key>,
           class EqualKey = std::equal_to<Key>, class KeyConverter = google::sparsehash_internal::NoOp,
           template <class...> class Alloc = google::libc_allocator_with_realloc>
-class wrapped_dense_hash_map {
+class wrapped_dense_hash_map
+  : public google::copy_characteristics<std::is_copy_constructible<Value>::value> {
  private:
   typedef map_detail::key_value_wrapper<Key, Value> wrapped_type;
   typedef typename wrapped_type::value_type payload_type;
