@@ -99,4 +99,14 @@ using decay_to_pass_t = typename decay_to_pass<T>::type;
 template <class T>
 using decay_to_pass_const_t = typename decay_to_pass<T>::const_type;
 
+template <bool copyable>
+struct copy_characteristics {};
+
+template <>
+struct copy_characteristics<false> {
+  copy_characteristics() = default;
+  copy_characteristics(const copy_characteristics&) = delete;
+  copy_characteristics(copy_characteristics&&) = default;
+};
+
 }
